@@ -3,6 +3,10 @@ import { Grid } from './Grid';
 import { Point } from '../types/geometry';
 import { Renderer } from '../renderer/Renderer';
 import { Project } from '../model/Project';
+import { ToolManager } from '../tools/ToolManager';
+import { Tool } from '../tools/Tool';
+import { Selection } from '../selection/Selection';
+import { SelectionRenderer } from '../selection/SelectionRenderer';
 
 export class Viewport {
   private svg: SVGSVGElement;
@@ -14,6 +18,9 @@ export class Viewport {
   private coordinateDisplay: HTMLElement;
   private renderer?: Renderer;
   private project?: Project;
+  private toolManager?: ToolManager;
+  private selection?: Selection;
+  private selectionRenderer?: SelectionRenderer;
 
   constructor(container: HTMLElement) {
     this.transform = new ViewportTransform();
@@ -105,6 +112,16 @@ export class Viewport {
     if (this.renderer && this.project) {
       this.renderer.render(this.project, this.transform.getState().zoom);
     }
+
+    // Render selection indicators
+    if (this.selectionRenderer) {
+      this.selectionRenderer.render(this.transform.getState().zoom);
+    }
+  }
+
+  // Public render method for tools to trigger updates
+  public refresh(): void {
+    this.render();
   }
 
   reset(): void {
@@ -116,7 +133,26 @@ export class Viewport {
   setProject(project: Project): void {
     this.project = project;
     this.renderer = new Renderer(this.worldGroup);
+    
+    // Initialize selection system
+    this.selection = new Selection();
+    this.selectionRenderer = new SelectionRenderer(this.worldGroup, this.selection, project);
+    
+    // Initialize tool manager
+    this.toolManager = new ToolManager(this.svg, this.transform);
+    
     this.render();
+  }
+
+  // Set active tool
+  setTool(tool: Tool): void {
+    if (this.toolManager) {
+      this.toolManager.setActiveTool(tool);
+    }
+  }
+
+  getSelection(): Selection | undefined {
+    return this.selection;
   }
 
   getWorldGroup(): SVGGElement {

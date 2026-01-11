@@ -2,8 +2,9 @@ import { Viewport } from './viewport/Viewport';
 import { Project } from './model/Project';
 import { GeometryObject } from './geometry/GeometryObject';
 import { GeometryType } from './geometry/types';
+import { SelectTool } from './tools/SelectTool';
 
-console.log('GardenCAD v0.3 - Geometry Rendering');
+console.log('GardenCAD v0.4 - Selection and Move Tool');
 
 const app = document.getElementById('app');
 if (!app) {
@@ -127,6 +128,16 @@ for (let x = 0; x <= 2000; x += 500) {
 // Initialize viewport
 const viewport = new Viewport(container);
 viewport.setProject(project);
+
+// Initialize and activate SelectTool
+const selectTool = new SelectTool(
+  project,
+  viewport.getSelection()!,
+  () => viewport.refresh()
+);
+
+viewport.setTool(selectTool);
+console.log('Select tool active - click objects to select, drag to move');
 
 document.getElementById('reset-view')?.addEventListener('click', () => {
   viewport.reset();
