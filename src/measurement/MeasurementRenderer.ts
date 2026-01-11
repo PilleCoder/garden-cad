@@ -1,10 +1,12 @@
 import { MeasurementManager } from './MeasurementManager';
 import { MeasurementType } from './Measurement';
 import { Point } from '../types/geometry';
+import { LayerManager } from '../model/LayerManager';
 
 export class MeasurementRenderer {
   private measurementGroup: SVGGElement;
   private manager: MeasurementManager;
+  private layerManager?: LayerManager;
 
   constructor(worldGroup: SVGGElement, manager: MeasurementManager) {
     this.manager = manager;
@@ -15,10 +17,22 @@ export class MeasurementRenderer {
     this.manager.onChange(() => this.render(1.0));
   }
 
+  setLayerManager(layerManager: LayerManager): void {
+    this.layerManager = layerManager;
+  }
+
   render(zoom: number): void {
     // Clear existing
     while (this.measurementGroup.firstChild) {
       this.measurementGroup.removeChild(this.measurementGroup.firstChild);
+    }
+
+    // Check if measurements layer is visible
+    if (this.layerManager) {
+      const measurementLayer = this.layerManager.getLayer('measurements');
+      if (measurementLayer && !measurementLayer.isVisible()) {
+        return; // Don't render if layer is hidden
+      }
     }
 
     const measurements = this.manager.getAllMeasurements();
@@ -33,6 +47,22 @@ export class MeasurementRenderer {
   private renderMeasurement(measurement: any, zoom: number): SVGGElement | null {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.setAttribute('data-measurement-id', measurement.id);
+    group.style.cursor = 'pointer';
+
+    // Add hover effect
+    group.addEventListener('mouseenter', () => {
+      group.setAttribute('opacity', '0.7');
+    });
+    group.addEventListener('mouseleave', () => {
+      group.setAttribute('opacity', '1.0');
+    });
+
+    // Add click handler to delete measurement
+    group.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.manager.removeMeasurement(measurement.id);
+      console.log(`Measurement deleted: ${measurement.getFormattedValue()}`);
+    });
 
     switch (measurement.type) {
       case MeasurementType.DISTANCE:

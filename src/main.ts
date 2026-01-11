@@ -234,8 +234,16 @@ const measurementRenderer = new MeasurementRenderer(
   measurementManager
 );
 
+// Set layer manager on measurement renderer
+measurementRenderer.setLayerManager(layerManager);
+
 // Listen to measurement changes to update renderer
 measurementManager.onChange(() => {
+  measurementRenderer.render(viewport.getZoom());
+});
+
+// Listen to layer changes to update measurement visibility
+layerManager.onChange(() => {
   measurementRenderer.render(viewport.getZoom());
 });
 
@@ -417,8 +425,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 console.log('All drawing and measurement tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle, M=Measure, A=Area, G=Toggle Snap');
-console.log('Layer system initialized with 6 default layers');
-console.log('Measurement tools ready: Distance and Area measurement available');
+console.log('Layer system initialized with 7 default layers (including Measurements)');
+console.log('Measurement tools ready: Distance and Area measurement available - click measurements to delete');
 
 document.getElementById('reset-view')?.addEventListener('click', () => {
   viewport.reset();
