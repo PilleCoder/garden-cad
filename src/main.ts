@@ -6,10 +6,14 @@ import { SelectTool } from './tools/SelectTool';
 import { PointTool } from './tools/PointTool';
 import { LineTool } from './tools/LineTool';
 import { CircleTool } from './tools/CircleTool';
+import { MeasureTool } from './tools/MeasureTool';
+import { AreaTool } from './tools/AreaTool';
 import { LayerManager } from './model/LayerManager';
 import { LayerPanel } from './ui/LayerPanel';
+import { MeasurementManager } from './measurement/MeasurementManager';
+import { MeasurementRenderer } from './measurement/MeasurementRenderer';
 
-console.log('GardenCAD v0.7 - Layer System');
+console.log('GardenCAD v0.8 - Measurement Tools');
 
 const app = document.getElementById('app');
 if (!app) {
@@ -26,6 +30,8 @@ app.innerHTML = `
         <button id="tool-point" class="tool-btn">Point</button>
         <button id="tool-line" class="tool-btn">Line</button>
         <button id="tool-circle" class="tool-btn">Circle</button>
+        <button id="tool-measure" class="tool-btn">Measure</button>
+        <button id="tool-area" class="tool-btn">Area</button>
       </div>
       <div style="display: flex; gap: 10px; align-items: center; margin-left: 20px; border-left: 1px solid #555; padding-left: 20px;">
         <label style="font-size: 13px;">Grid:</label>
@@ -40,6 +46,7 @@ app.innerHTML = `
           <span id="snap-icon">🧲</span> Snap
         </button>
       </div>
+      <button id="clear-measurements" style="margin-left: 10px;">Clear Measurements</button>
       <button id="reset-view" style="margin-left: auto;">Reset View</button>
     </div>
     <div style="display: flex; flex: 1; overflow: hidden;">
@@ -220,6 +227,26 @@ if (layerPanelContainer) {
 const snapManager = viewport.getSnapManager();
 const snapIndicator = viewport.getSnapIndicator()!;
 
+// Initialize measurement system
+const measurementManager = new MeasurementManager();
+const measurementRenderer = new MeasurementRenderer(
+  viewport.getWorldGroup(),
+  measurementManager
+);
+
+// Set layer manager on measurement renderer
+measurementRenderer.setLayerManager(layerManager);
+
+// Listen to measurement changes to update renderer
+measurementManager.onChange(() => {
+  measurementRenderer.render(viewport.getZoom());
+});
+
+// Listen to layer changes to update measurement visibility
+layerManager.onChange(() => {
+  measurementRenderer.render(viewport.getZoom());
+});
+
 // Initialize all tools with snap support and layer manager
 const selectTool = new SelectTool(
   project,
@@ -257,8 +284,20 @@ const circleTool = new CircleTool(
   () => viewport.refresh()
 );
 
+const measureTool = new MeasureTool(
+  measurementManager,
+  snapManager,
+  viewport.getPreviewGroup()
+);
+
+const areaTool = new AreaTool(
+  measurementManager,
+  snapManager,
+  viewport.getPreviewGroup()
+);
+
 // Tool switching
-const tools = { select: selectTool, point: pointTool, line: lineTool, circle: circleTool };
+const tools = { select: selectTool, point: pointTool, line: lineTool, circle: circleTool, measure: measureTool, area: areaTool };
 let activeTool: string = 'select';
 
 function setTool(toolName: string): void {
@@ -274,7 +313,9 @@ function setTool(toolName: string): void {
     select: 'Select tool active - click to select, drag to move',
     point: 'Point tool active - click to place point',
     line: 'Line tool active - click start point, then end point',
-    circle: 'Circle tool active - click center, then click to set radius'
+    circle: 'Circle tool active - click center, then click to set radius',
+    measure: 'Measure tool active - click two points to measure distance',
+    area: 'Area tool active - click points to define polygon, double-click or Enter to complete'
   };
   const statusText = document.getElementById('status-text');
   if (statusText) statusText.textContent = messages[toolName] || 'Tool active';
@@ -299,6 +340,8 @@ document.getElementById('tool-select')?.addEventListener('click', () => setTool(
 document.getElementById('tool-point')?.addEventListener('click', () => setTool('point'));
 document.getElementById('tool-line')?.addEventListener('click', () => setTool('line'));
 document.getElementById('tool-circle')?.addEventListener('click', () => setTool('circle'));
+document.getElementById('tool-measure')?.addEventListener('click', () => setTool('measure'));
+document.getElementById('tool-area')?.addEventListener('click', () => setTool('area'));
 
 // Grid spacing control
 document.getElementById('grid-spacing')?.addEventListener('change', (e) => {
@@ -325,6 +368,19 @@ document.getElementById('snap-toggle')?.addEventListener('click', () => {
 
 viewport.setTool(selectTool);
 
+// Clear measurements button
+document.getElementById('clear-measurements')?.addEventListener('click', () => {
+  measurementManager.clearAll();
+  console.log('All measurements cleared');
+});
+
+// Handle double-click for area tool
+viewport.getSVG().addEventListener('dblclick', () => {
+  if (activeTool === 'area') {
+    areaTool.onDoubleClick();
+  }
+});
+
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
   // ESC key handling
@@ -333,7 +389,16 @@ document.addEventListener('keydown', (e) => {
       (lineTool as any).onKeyDown?.('Escape');
     } else if (activeTool === 'circle') {
       (circleTool as any).onKeyDown?.('Escape');
+    } else if (activeTool === 'measure') {
+      measureTool.onKeyDown('Escape');
+    } else if (activeTool === 'area') {
+      areaTool.onKeyDown('Escape');
     }
+  }
+  
+  // Enter key for area tool
+  if (e.key === 'Enter' && activeTool === 'area') {
+    areaTool.onKeyDown('Enter');
   }
   
   // Tool shortcuts
@@ -341,6 +406,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'p' || e.key === 'P') setTool('point');
   if (e.key === 'l' || e.key === 'L') setTool('line');
   if (e.key === 'c' || e.key === 'C') setTool('circle');
+  if (e.key === 'm' || e.key === 'M') setTool('measure');
+  if (e.key === 'a' || e.key === 'A') setTool('area');
   
   // Toggle snap with 'G' key
   if (e.key === 'g' || e.key === 'G') {
@@ -357,8 +424,9 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-console.log('All drawing tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle, G=Toggle Snap');
-console.log('Layer system initialized with 6 default layers');
+console.log('All drawing and measurement tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle, M=Measure, A=Area, G=Toggle Snap');
+console.log('Layer system initialized with 7 default layers (including Measurements)');
+console.log('Measurement tools ready: Distance and Area measurement available - click measurements to delete');
 
 document.getElementById('reset-view')?.addEventListener('click', () => {
   viewport.reset();

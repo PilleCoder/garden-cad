@@ -227,4 +227,12 @@ export class Viewport {
   getPreviewGroup(): SVGGElement {
     return this.previewGroup;
   }
+
+  getSVG(): SVGSVGElement {
+    return this.svg;
+  }
+
+  getZoom(): number {
+    return this.transform.getState().zoom;
+  }
 }

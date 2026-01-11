@@ -19,7 +19,8 @@ export class LayerManager {
       { id: 'hardscape', name: 'Hardscape (Paths/Patios)', order: 2 },
       { id: 'vegetation', name: 'Vegetation (Trees/Beds)', order: 3 },
       { id: 'utilities', name: 'Utilities', order: 4 },
-      { id: 'reference', name: 'Reference Points', order: 5 }
+      { id: 'reference', name: 'Reference Points', order: 5 },
+      { id: 'measurements', name: 'Measurements', order: 6 }
     ];
 
     for (const layerData of defaultLayers) {

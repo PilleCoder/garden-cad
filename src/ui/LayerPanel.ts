@@ -73,8 +73,7 @@ export class LayerPanel {
         if (layerId) {
           const layer = this.layerManager.getLayer(layerId);
           if (layer) {
-            layer.setVisible(!layer.isVisible());
-            this.layerManager.onChange(() => {}); // Trigger update
+            this.layerManager.updateLayer(layerId, { visible: !layer.isVisible() });
             this.onUpdate();
             console.log(`Layer '${layer.getName()}' ${layer.isVisible() ? 'visible' : 'hidden'}`);
           }
@@ -90,8 +89,7 @@ export class LayerPanel {
         if (layerId) {
           const layer = this.layerManager.getLayer(layerId);
           if (layer) {
-            layer.setLocked(!layer.isLocked());
-            this.layerManager.onChange(() => {}); // Trigger update
+            this.layerManager.updateLayer(layerId, { locked: !layer.isLocked() });
             console.log(`Layer '${layer.getName()}' ${layer.isLocked() ? 'locked' : 'unlocked'}`);
           }
         }
@@ -105,11 +103,8 @@ export class LayerPanel {
         const layerId = (slider as HTMLElement).dataset.layerId;
         const value = parseInt((slider as HTMLInputElement).value);
         if (layerId) {
-          const layer = this.layerManager.getLayer(layerId);
-          if (layer) {
-            layer.setOpacity(value / 100);
-            this.onUpdate();
-          }
+          this.layerManager.updateLayer(layerId, { opacity: value / 100 });
+          this.onUpdate();
         }
       });
     });
