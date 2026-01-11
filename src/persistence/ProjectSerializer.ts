@@ -89,42 +89,58 @@ export class ProjectSerializer {
     }
 
     // Clear existing data
-    project.getAllObjects().forEach(obj => project.removeObject(obj.id));
+    const objectsToRemove = project.getAllObjects();
+    objectsToRemove.forEach(obj => project.removeObject(obj.id));
     
     // Restore layers (if present, otherwise use defaults)
     if (data.layers && data.layers.length > 0) {
-      // Clear default layers and create from saved data
+      // Get existing layers and try to match them up with saved layers
       const existingLayers = layerManager.getAllLayers();
+      const savedLayerIds = new Set(data.layers.map((l: any) => l.id));
+      
+      // Remove layers that don't exist in saved data
       existingLayers.forEach(layer => {
-        try {
-          layerManager.removeLayer(layer.id);
-        } catch (e) {
-          // Can't remove default layer, update it instead
+        if (!savedLayerIds.has(layer.id)) {
+          try {
+            layerManager.removeLayer(layer.id);
+          } catch (e) {
+            // Can't remove default layer
+          }
         }
       });
 
+      // Add or update layers from saved data
       data.layers.forEach((layerData: any) => {
+        const existingLayer = layerManager.getLayer(layerData.id);
+        
+        if (!existingLayer) {
+          // Layer doesn't exist, create it
+          try {
+            layerManager.addLayer(layerData.id, layerData.name);
+          } catch (e) {
+            console.warn(`Could not create layer ${layerData.id}:`, e);
+          }
+        }
+        
+        // Update layer properties
         try {
-          layerManager.addLayer(layerData.id, layerData.name);
-          layerManager.updateLayer(layerData.id, {
-            visible: layerData.visible !== false,
-            locked: layerData.locked === true,
-            opacity: layerData.opacity ?? 1.0
-          });
-        } catch (e) {
-          // Layer might already exist, update it
           layerManager.updateLayer(layerData.id, {
             name: layerData.name,
             visible: layerData.visible !== false,
             locked: layerData.locked === true,
             opacity: layerData.opacity ?? 1.0
           });
+        } catch (e) {
+          console.warn(`Could not update layer ${layerData.id}:`, e);
         }
       });
 
       // Set active layer
       if (data.layers.length > 0) {
-        layerManager.setActiveLayer(data.layers[0].id);
+        const firstVisibleLayer = data.layers.find((l: any) => l.visible !== false);
+        if (firstVisibleLayer) {
+          layerManager.setActiveLayer(firstVisibleLayer.id);
+        }
       }
     }
 

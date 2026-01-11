@@ -562,6 +562,11 @@ async function loadProject(): Promise<void> {
       return;
     }
 
+    // Clear selection before load
+    if (viewport.getSelection()) {
+      viewport.getSelection()!.deselect();
+    }
+
     ProjectSerializer.deserialize(
       projectJSON,
       project,
@@ -571,9 +576,13 @@ async function loadProject(): Promise<void> {
 
     currentProjectName = projectJSON.metadata.name;
     hasUnsavedChanges = false;
-    viewport.render();
+    
+    // Force complete refresh
+    viewport.refresh();
+    measurementRenderer.render(viewport.getZoom());
     
     console.log(`Project loaded: ${currentProjectName}`);
+    console.log(`Active objects: ${project.getAllObjects().length}`);
   } catch (error) {
     console.error('Load failed:', error);
   }
@@ -619,6 +628,12 @@ async function importFromFile(): Promise<void> {
     
     if (!confirmImport) return;
 
+    // Clear selection before import
+    if (viewport.getSelection()) {
+      viewport.getSelection()!.deselect();
+    }
+
+    // Deserialize the imported project
     ProjectSerializer.deserialize(
       projectJSON,
       project,
@@ -629,9 +644,13 @@ async function importFromFile(): Promise<void> {
     currentProjectId = projectJSON.projectId;
     currentProjectName = projectJSON.metadata.name;
     hasUnsavedChanges = true;
-    viewport.render();
+    
+    // Force complete refresh
+    viewport.refresh();
+    measurementRenderer.render(viewport.getZoom());
     
     console.log(`Imported project: ${currentProjectName}`);
+    console.log(`Active objects: ${project.getAllObjects().length}`);
     
     // Save imported project
     await saveProject();
