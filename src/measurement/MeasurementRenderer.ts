@@ -7,6 +7,7 @@ export class MeasurementRenderer {
   private measurementGroup: SVGGElement;
   private manager: MeasurementManager;
   private layerManager?: LayerManager;
+  private currentZoom: number = 1.0;
 
   constructor(worldGroup: SVGGElement, manager: MeasurementManager) {
     this.manager = manager;
@@ -14,7 +15,7 @@ export class MeasurementRenderer {
     this.measurementGroup.id = 'measurements';
     worldGroup.appendChild(this.measurementGroup);
 
-    this.manager.onChange(() => this.render(1.0));
+    this.manager.onChange(() => this.render(this.currentZoom));
   }
 
   setLayerManager(layerManager: LayerManager): void {
@@ -22,6 +23,7 @@ export class MeasurementRenderer {
   }
 
   render(zoom: number): void {
+    this.currentZoom = zoom;
     // Clear existing
     while (this.measurementGroup.firstChild) {
       this.measurementGroup.removeChild(this.measurementGroup.firstChild);
