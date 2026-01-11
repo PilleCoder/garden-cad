@@ -122,7 +122,7 @@ export class Viewport {
     });
   }
 
-  private render(): void {
+  render(): void {
     // Apply transform to world group
     this.worldGroup.setAttribute('transform', this.transform.toSVGTransform());
 
@@ -206,6 +206,10 @@ export class Viewport {
 
   getSelection(): Selection | undefined {
     return this.selection;
+  }
+
+  getRenderer(): Renderer | undefined {
+    return this.renderer;
   }
 
   getSnapManager(): SnapManager {

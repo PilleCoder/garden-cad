@@ -4,6 +4,7 @@ import { GeometryObject } from '../geometry/GeometryObject';
 import { GeometryType, Point } from '../geometry/types';
 import { SnapManager } from '../snapping/SnapManager';
 import { SnapIndicator } from '../snapping/SnapIndicator';
+import { LayerManager } from '../model/LayerManager';
 
 enum CircleToolState {
   WAITING_FOR_CENTER,
@@ -21,6 +22,7 @@ export class CircleTool implements Tool {
   private currentPoint: Point | null = null;
   private snapManager: SnapManager;
   private snapIndicator: SnapIndicator;
+  private layerManager: LayerManager;
   private currentZoom: number = 1.0;
 
   constructor(
@@ -28,12 +30,14 @@ export class CircleTool implements Tool {
     previewGroup: SVGGElement,
     snapManager: SnapManager,
     snapIndicator: SnapIndicator,
+    layerManager: LayerManager,
     onUpdate: () => void
   ) {
     this.project = project;
     this.previewGroup = previewGroup;
     this.snapManager = snapManager;
     this.snapIndicator = snapIndicator;
+    this.layerManager = layerManager;
     this.onUpdate = onUpdate;
   }
 
@@ -95,10 +99,11 @@ export class CircleTool implements Tool {
       }
 
       // Create circle
+      const activeLayerId = this.layerManager.getActiveLayerId() || 'default';
       const id = this.generateId('circle');
       const circle = new GeometryObject(
         id,
-        'default',
+        activeLayerId,
         {
           type: GeometryType.CIRCLE,
           center: this.centerPoint,

@@ -5,6 +5,7 @@ import { GeometryObject } from '../geometry/GeometryObject';
 import { GeometryType, Point, PointGeometry, LineGeometry, CircleGeometry } from '../geometry/types';
 import { SnapManager } from '../snapping/SnapManager';
 import { SnapIndicator } from '../snapping/SnapIndicator';
+import { LayerManager } from '../model/LayerManager';
 
 export class SelectTool implements Tool {
   readonly name = 'select';
@@ -18,6 +19,7 @@ export class SelectTool implements Tool {
   private onUpdate: () => void;
   private snapManager: SnapManager;
   private snapIndicator: SnapIndicator;
+  private layerManager?: LayerManager;
   private currentZoom: number = 1.0;
 
   constructor(
@@ -32,6 +34,10 @@ export class SelectTool implements Tool {
     this.snapManager = snapManager;
     this.snapIndicator = snapIndicator;
     this.onUpdate = onUpdate;
+  }
+
+  setLayerManager(layerManager: LayerManager): void {
+    this.layerManager = layerManager;
   }
 
   setZoom(zoom: number): void {
@@ -53,6 +59,13 @@ export class SelectTool implements Tool {
     const selectedId = this.selection.getFirstSelected();
     if (selectedId) {
       const obj = this.project.getObject(selectedId);
+      
+      // Check if object's layer is locked
+      if (obj && this.layerManager && this.layerManager.isLayerLocked(obj.layerId)) {
+        console.log('Cannot move object on locked layer');
+        return;
+      }
+      
       if (obj && this.hitTest(obj, event.worldPos)) {
         this.isDragging = true;
         this.dragStartWorld = event.worldPos;
@@ -106,7 +119,15 @@ export class SelectTool implements Tool {
     // Reverse order to select topmost object
     for (let i = objects.length - 1; i >= 0; i--) {
       const obj = objects[i];
-      if (obj && this.hitTest(obj, event.worldPos)) {
+      if (!obj) continue;
+      
+      // Skip if layer is locked or hidden
+      if (this.layerManager) {
+        if (!this.layerManager.isLayerVisible(obj.layerId)) continue;
+        if (this.layerManager.isLayerLocked(obj.layerId)) continue;
+      }
+      
+      if (this.hitTest(obj, event.worldPos)) {
         hitObject = obj;
         break;
       }

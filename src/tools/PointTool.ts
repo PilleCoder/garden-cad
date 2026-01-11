@@ -4,6 +4,7 @@ import { GeometryObject } from '../geometry/GeometryObject';
 import { GeometryType, Point } from '../geometry/types';
 import { SnapManager } from '../snapping/SnapManager';
 import { SnapIndicator } from '../snapping/SnapIndicator';
+import { LayerManager } from '../model/LayerManager';
 
 export class PointTool implements Tool {
   readonly name = 'point';
@@ -14,6 +15,7 @@ export class PointTool implements Tool {
   private previewGroup: SVGGElement;
   private snapManager: SnapManager;
   private snapIndicator: SnapIndicator;
+  private layerManager: LayerManager;
   private currentZoom: number = 1.0;
 
   constructor(
@@ -21,12 +23,14 @@ export class PointTool implements Tool {
     previewGroup: SVGGElement,
     snapManager: SnapManager,
     snapIndicator: SnapIndicator,
+    layerManager: LayerManager,
     onUpdate: () => void
   ) {
     this.project = project;
     this.previewGroup = previewGroup;
     this.snapManager = snapManager;
     this.snapIndicator = snapIndicator;
+    this.layerManager = layerManager;
     this.onUpdate = onUpdate;
   }
 
@@ -66,10 +70,11 @@ export class PointTool implements Tool {
     // Apply snapping to final position
     const snapResult = this.snapManager.snap(event.worldPos);
     
+    const activeLayerId = this.layerManager.getActiveLayerId() || 'default';
     const id = this.generateId('point');
     const point = new GeometryObject(
       id,
-      'default',
+      activeLayerId,
       {
         type: GeometryType.POINT,
         position: snapResult.point
