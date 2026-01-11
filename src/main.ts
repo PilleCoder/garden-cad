@@ -16,6 +16,7 @@ import { ProjectSerializer } from './persistence/ProjectSerializer';
 import { IndexedDBAdapter } from './persistence/IndexedDBAdapter';
 import { FileAdapter } from './persistence/FileAdapter';
 import { SaveIndicator } from './ui/SaveIndicator';
+import { ContextMenu } from './ui/ContextMenu';
 
 console.log('GardenCAD v0.9 - Persistence Layer');
 
@@ -242,6 +243,9 @@ if (layerPanelContainer) {
 const snapManager = viewport.getSnapManager();
 const snapIndicator = viewport.getSnapIndicator()!;
 
+// Create context menu
+const contextMenu = new ContextMenu(document.body);
+
 // Initialize measurement system
 const measurementManager = new MeasurementManager();
 const measurementRenderer = new MeasurementRenderer(
@@ -276,6 +280,7 @@ const selectTool = new SelectTool(
   }
 );
 selectTool.setLayerManager(layerManager);
+selectTool.setContextMenu(contextMenu);
 
 const pointTool = new PointTool(
   project,

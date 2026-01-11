@@ -3,6 +3,7 @@ import { Point } from '../types/geometry';
 export interface ToolMouseEvent {
   worldPos: Point;
   screenPos: Point;
+  clientPos: Point;
   button: number;
   shiftKey: boolean;
   ctrlKey: boolean;
@@ -21,6 +22,7 @@ export interface Tool {
   onMouseMove(event: ToolMouseEvent): void;
   onMouseUp(event: ToolMouseEvent): void;
   onMouseClick(event: ToolMouseEvent): void;
+  onContextMenu?(event: ToolMouseEvent): void;
   
   // Cursor
   getCursor(): string;
