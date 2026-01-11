@@ -3,8 +3,11 @@ import { Project } from './model/Project';
 import { GeometryObject } from './geometry/GeometryObject';
 import { GeometryType } from './geometry/types';
 import { SelectTool } from './tools/SelectTool';
+import { PointTool } from './tools/PointTool';
+import { LineTool } from './tools/LineTool';
+import { CircleTool } from './tools/CircleTool';
 
-console.log('GardenCAD v0.4 - Selection and Move Tool');
+console.log('GardenCAD v0.5 - Drawing Tools');
 
 const app = document.getElementById('app');
 if (!app) {
@@ -16,12 +19,42 @@ app.innerHTML = `
   <div style="display: flex; flex-direction: column; width: 100%; height: 100vh;">
     <div style="padding: 10px; background: #333; color: white; display: flex; gap: 10px; align-items: center;">
       <h1 style="margin: 0; font-size: 18px;">GardenCAD</h1>
-      <button id="reset-view">Reset View</button>
-      <span style="margin-left: auto; font-size: 12px;">Pan: Shift+Drag | Zoom: Wheel</span>
+      <div style="display: flex; gap: 5px; margin-left: 20px;" id="toolbar">
+        <button id="tool-select" class="tool-btn active">Select</button>
+        <button id="tool-point" class="tool-btn">Point</button>
+        <button id="tool-line" class="tool-btn">Line</button>
+        <button id="tool-circle" class="tool-btn">Circle</button>
+      </div>
+      <button id="reset-view" style="margin-left: auto;">Reset View</button>
     </div>
     <div id="viewport-container" style="flex: 1; position: relative;"></div>
+    <div style="padding: 8px; background: #f0f0f0; font-size: 12px; font-family: monospace;" id="status-bar">
+      Select tool active - click to select, drag to move
+    </div>
   </div>
 `;
+
+// Add CSS for tool buttons
+const style = document.createElement('style');
+style.textContent = `
+  .tool-btn {
+    padding: 6px 12px;
+    border: 1px solid #555;
+    background: #444;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .tool-btn:hover {
+    background: #555;
+  }
+  .tool-btn.active {
+    background: #0066ff;
+    border-color: #0066ff;
+  }
+`;
+document.head.appendChild(style);
 
 const container = document.getElementById('viewport-container');
 if (!container) {
@@ -129,15 +162,81 @@ for (let x = 0; x <= 2000; x += 500) {
 const viewport = new Viewport(container);
 viewport.setProject(project);
 
-// Initialize and activate SelectTool
+// Initialize all tools
 const selectTool = new SelectTool(
   project,
   viewport.getSelection()!,
   () => viewport.refresh()
 );
 
+const pointTool = new PointTool(
+  project,
+  viewport.getPreviewGroup(),
+  () => viewport.refresh()
+);
+
+const lineTool = new LineTool(
+  project,
+  viewport.getPreviewGroup(),
+  () => viewport.refresh()
+);
+
+const circleTool = new CircleTool(
+  project,
+  viewport.getPreviewGroup(),
+  () => viewport.refresh()
+);
+
+// Tool switching
+const tools = { select: selectTool, point: pointTool, line: lineTool, circle: circleTool };
+let activeTool: string = 'select';
+
+function setTool(toolName: string): void {
+  activeTool = toolName;
+  viewport.setTool(tools[toolName as keyof typeof tools]);
+  
+  // Update button states
+  document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(`tool-${toolName}`)?.classList.add('active');
+  
+  // Update status bar
+  const messages: Record<string, string> = {
+    select: 'Select tool active - click to select, drag to move',
+    point: 'Point tool active - click to place point',
+    line: 'Line tool active - click start point, then end point',
+    circle: 'Circle tool active - click center, then click to set radius'
+  };
+  const statusBar = document.getElementById('status-bar');
+  if (statusBar) statusBar.textContent = messages[toolName] || 'Tool active';
+}
+
+// Attach toolbar button handlers
+document.getElementById('tool-select')?.addEventListener('click', () => setTool('select'));
+document.getElementById('tool-point')?.addEventListener('click', () => setTool('point'));
+document.getElementById('tool-line')?.addEventListener('click', () => setTool('line'));
+document.getElementById('tool-circle')?.addEventListener('click', () => setTool('circle'));
+
 viewport.setTool(selectTool);
-console.log('Select tool active - click objects to select, drag to move');
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // ESC key handling
+  if (e.key === 'Escape') {
+    if (activeTool === 'line') {
+      (lineTool as any).onKeyDown?.('Escape');
+    } else if (activeTool === 'circle') {
+      (circleTool as any).onKeyDown?.('Escape');
+    }
+  }
+  
+  // Tool shortcuts
+  if (e.key === 'v' || e.key === 'V') setTool('select');
+  if (e.key === 'p' || e.key === 'P') setTool('point');
+  if (e.key === 'l' || e.key === 'L') setTool('line');
+  if (e.key === 'c' || e.key === 'C') setTool('circle');
+});
+
+console.log('All drawing tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle');
 
 document.getElementById('reset-view')?.addEventListener('click', () => {
   viewport.reset();
