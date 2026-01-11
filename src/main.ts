@@ -25,11 +25,25 @@ app.innerHTML = `
         <button id="tool-line" class="tool-btn">Line</button>
         <button id="tool-circle" class="tool-btn">Circle</button>
       </div>
+      <div style="display: flex; gap: 10px; align-items: center; margin-left: 20px; border-left: 1px solid #555; padding-left: 20px;">
+        <label style="font-size: 13px;">Grid:</label>
+        <select id="grid-spacing" style="padding: 4px 8px; background: #444; color: white; border: 1px solid #555; border-radius: 4px;">
+          <option value="1">1 cm</option>
+          <option value="5">5 cm</option>
+          <option value="10" selected>10 cm</option>
+          <option value="50">50 cm</option>
+          <option value="100">100 cm</option>
+        </select>
+        <button id="snap-toggle" class="snap-btn active" title="Toggle snap (G)">
+          <span id="snap-icon">🧲</span> Snap
+        </button>
+      </div>
       <button id="reset-view" style="margin-left: auto;">Reset View</button>
     </div>
     <div id="viewport-container" style="flex: 1; position: relative;"></div>
-    <div style="padding: 8px; background: #f0f0f0; font-size: 12px; font-family: monospace;" id="status-bar">
-      Select tool active - click to select, drag to move
+    <div style="padding: 8px; background: #f0f0f0; font-size: 12px; font-family: monospace; display: flex; justify-content: space-between;" id="status-bar">
+      <span id="status-text">Select tool active - click to select, drag to move</span>
+      <span id="snap-status" style="color: #0066ff; font-weight: bold;">SNAP: ON (10 cm)</span>
     </div>
   </div>
 `;
@@ -52,6 +66,25 @@ style.textContent = `
   .tool-btn.active {
     background: #0066ff;
     border-color: #0066ff;
+  }
+  .snap-btn {
+    padding: 6px 12px;
+    border: 1px solid #555;
+    background: #444;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .snap-btn:hover {
+    background: #555;
+  }
+  .snap-btn.active {
+    background: #228B22;
+    border-color: #228B22;
   }
 `;
 document.head.appendChild(style);
@@ -162,28 +195,40 @@ for (let x = 0; x <= 2000; x += 500) {
 const viewport = new Viewport(container);
 viewport.setProject(project);
 
-// Initialize all tools
+// Get snap manager and indicator
+const snapManager = viewport.getSnapManager();
+const snapIndicator = viewport.getSnapIndicator()!;
+
+// Initialize all tools with snap support
 const selectTool = new SelectTool(
   project,
   viewport.getSelection()!,
+  snapManager,
+  snapIndicator,
   () => viewport.refresh()
 );
 
 const pointTool = new PointTool(
   project,
   viewport.getPreviewGroup(),
+  snapManager,
+  snapIndicator,
   () => viewport.refresh()
 );
 
 const lineTool = new LineTool(
   project,
   viewport.getPreviewGroup(),
+  snapManager,
+  snapIndicator,
   () => viewport.refresh()
 );
 
 const circleTool = new CircleTool(
   project,
   viewport.getPreviewGroup(),
+  snapManager,
+  snapIndicator,
   () => viewport.refresh()
 );
 
@@ -206,8 +251,22 @@ function setTool(toolName: string): void {
     line: 'Line tool active - click start point, then end point',
     circle: 'Circle tool active - click center, then click to set radius'
   };
-  const statusBar = document.getElementById('status-bar');
-  if (statusBar) statusBar.textContent = messages[toolName] || 'Tool active';
+  const statusText = document.getElementById('status-text');
+  if (statusText) statusText.textContent = messages[toolName] || 'Tool active';
+}
+
+// Update snap status display
+function updateSnapStatus(): void {
+  const statusEl = document.getElementById('snap-status');
+  if (statusEl) {
+    if (snapManager.isEnabled()) {
+      statusEl.textContent = `SNAP: ON (${snapManager.getGridSpacing()} cm)`;
+      statusEl.style.color = '#0066ff';
+    } else {
+      statusEl.textContent = 'SNAP: OFF';
+      statusEl.style.color = '#999';
+    }
+  }
 }
 
 // Attach toolbar button handlers
@@ -215,6 +274,29 @@ document.getElementById('tool-select')?.addEventListener('click', () => setTool(
 document.getElementById('tool-point')?.addEventListener('click', () => setTool('point'));
 document.getElementById('tool-line')?.addEventListener('click', () => setTool('line'));
 document.getElementById('tool-circle')?.addEventListener('click', () => setTool('circle'));
+
+// Grid spacing control
+document.getElementById('grid-spacing')?.addEventListener('change', (e) => {
+  const spacing = parseInt((e.target as HTMLSelectElement).value);
+  snapManager.setGridSpacing(spacing);
+  updateSnapStatus();
+  console.log(`Grid spacing set to ${spacing} cm`);
+});
+
+// Snap toggle button
+document.getElementById('snap-toggle')?.addEventListener('click', () => {
+  const enabled = snapManager.toggle();
+  const btn = document.getElementById('snap-toggle');
+  if (btn) {
+    if (enabled) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  }
+  updateSnapStatus();
+  console.log(`Snap ${enabled ? 'enabled' : 'disabled'}`);
+});
 
 viewport.setTool(selectTool);
 
@@ -234,9 +316,23 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'p' || e.key === 'P') setTool('point');
   if (e.key === 'l' || e.key === 'L') setTool('line');
   if (e.key === 'c' || e.key === 'C') setTool('circle');
+  
+  // Toggle snap with 'G' key
+  if (e.key === 'g' || e.key === 'G') {
+    const enabled = snapManager.toggle();
+    const btn = document.getElementById('snap-toggle');
+    if (btn) {
+      if (enabled) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+    updateSnapStatus();
+  }
 });
 
-console.log('All drawing tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle');
+console.log('All drawing tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle, G=Toggle Snap');
 
 document.getElementById('reset-view')?.addEventListener('click', () => {
   viewport.reset();

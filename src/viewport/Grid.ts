@@ -7,6 +7,10 @@ export class Grid {
     this.gridSpacing = spacingCm;
   }
 
+  getSpacing(): number {
+    return this.gridSpacing;
+  }
+
   // Generate grid SVG elements based on visible bounds
   render(worldGroup: SVGGElement, viewportState: ViewportState, svgRect: DOMRect): void {
     const existingGrid = worldGroup.querySelector('#grid');
@@ -28,25 +32,27 @@ export class Grid {
 
     // Vertical lines
     for (let x = minX; x <= maxX; x += this.gridSpacing) {
+      const isMajor = x % (this.gridSpacing * 5) === 0;
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', x.toString());
       line.setAttribute('y1', minY.toString());
       line.setAttribute('x2', x.toString());
       line.setAttribute('y2', maxY.toString());
-      line.setAttribute('stroke', '#ddd');
-      line.setAttribute('stroke-width', (1 / viewportState.zoom).toString());
+      line.setAttribute('stroke', isMajor ? '#ccc' : '#e8e8e8');
+      line.setAttribute('stroke-width', (isMajor ? 1.5 / viewportState.zoom : 1 / viewportState.zoom).toString());
       gridGroup.appendChild(line);
     }
 
     // Horizontal lines
     for (let y = minY; y <= maxY; y += this.gridSpacing) {
+      const isMajor = y % (this.gridSpacing * 5) === 0;
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', minX.toString());
       line.setAttribute('y1', y.toString());
       line.setAttribute('x2', maxX.toString());
       line.setAttribute('y2', y.toString());
-      line.setAttribute('stroke', '#ddd');
-      line.setAttribute('stroke-width', (1 / viewportState.zoom).toString());
+      line.setAttribute('stroke', isMajor ? '#ccc' : '#e8e8e8');
+      line.setAttribute('stroke-width', (isMajor ? 1.5 / viewportState.zoom : 1 / viewportState.zoom).toString());
       gridGroup.appendChild(line);
     }
 

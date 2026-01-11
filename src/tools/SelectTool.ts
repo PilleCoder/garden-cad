@@ -3,6 +3,8 @@ import { Project } from '../model/Project';
 import { Selection } from '../selection/Selection';
 import { GeometryObject } from '../geometry/GeometryObject';
 import { GeometryType, Point, PointGeometry, LineGeometry, CircleGeometry } from '../geometry/types';
+import { SnapManager } from '../snapping/SnapManager';
+import { SnapIndicator } from '../snapping/SnapIndicator';
 
 export class SelectTool implements Tool {
   readonly name = 'select';
@@ -14,11 +16,26 @@ export class SelectTool implements Tool {
   private draggedObject: GeometryObject | null = null;
   private dragOffset: Point = { x: 0, y: 0 };
   private onUpdate: () => void;
+  private snapManager: SnapManager;
+  private snapIndicator: SnapIndicator;
+  private currentZoom: number = 1.0;
 
-  constructor(project: Project, selection: Selection, onUpdate: () => void) {
+  constructor(
+    project: Project,
+    selection: Selection,
+    snapManager: SnapManager,
+    snapIndicator: SnapIndicator,
+    onUpdate: () => void
+  ) {
     this.project = project;
     this.selection = selection;
+    this.snapManager = snapManager;
+    this.snapIndicator = snapIndicator;
     this.onUpdate = onUpdate;
+  }
+
+  setZoom(zoom: number): void {
+    this.currentZoom = zoom;
   }
 
   onActivate(): void {
@@ -28,6 +45,7 @@ export class SelectTool implements Tool {
   onDeactivate(): void {
     this.isDragging = false;
     this.draggedObject = null;
+    this.snapIndicator.hide();
   }
 
   onMouseDown(event: ToolMouseEvent): void {
@@ -47,8 +65,13 @@ export class SelectTool implements Tool {
 
   onMouseMove(event: ToolMouseEvent): void {
     if (this.isDragging && this.dragStartWorld && this.draggedObject) {
-      const dx = event.worldPos.x - this.dragStartWorld.x;
-      const dy = event.worldPos.y - this.dragStartWorld.y;
+      // Apply snapping to dragged position
+      const snapResult = this.snapManager.snap(event.worldPos);
+      const dx = snapResult.point.x - this.dragStartWorld.x;
+      const dy = snapResult.point.y - this.dragStartWorld.y;
+      
+      // Show snap indicator
+      this.snapIndicator.show(snapResult, this.currentZoom);
       
       // Calculate new position
       const newPos: Point = {
@@ -68,6 +91,7 @@ export class SelectTool implements Tool {
       this.isDragging = false;
       this.dragStartWorld = null;
       this.draggedObject = null;
+      this.snapIndicator.hide();
       console.log('Move completed');
     }
   }

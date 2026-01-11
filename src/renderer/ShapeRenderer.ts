@@ -31,7 +31,7 @@ export class ShapeRenderer {
     return circle;
   }
 
-  private renderLine(obj: GeometryObject, zoom: number): SVGLineElement {
+  private renderLine(obj: GeometryObject, _zoom: number): SVGLineElement {
     const geom = obj.geometry as LineGeometry;
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     
@@ -47,7 +47,7 @@ export class ShapeRenderer {
     return line;
   }
 
-  private renderCircle(obj: GeometryObject, zoom: number): SVGCircleElement {
+  private renderCircle(obj: GeometryObject, _zoom: number): SVGCircleElement {
     const geom = obj.geometry as CircleGeometry;
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     
