@@ -1,6 +1,8 @@
 import { ViewportTransform } from './ViewportTransform';
 import { Grid } from './Grid';
 import { Point } from '../types/geometry';
+import { Renderer } from '../renderer/Renderer';
+import { Project } from '../model/Project';
 
 export class Viewport {
   private svg: SVGSVGElement;
@@ -10,6 +12,8 @@ export class Viewport {
   private isPanning: boolean = false;
   private lastMousePos: Point = { x: 0, y: 0 };
   private coordinateDisplay: HTMLElement;
+  private renderer?: Renderer;
+  private project?: Project;
 
   constructor(container: HTMLElement) {
     this.transform = new ViewportTransform();
@@ -96,10 +100,22 @@ export class Viewport {
     // Render grid in world coordinates
     const svgRect = this.svg.getBoundingClientRect();
     this.grid.render(this.worldGroup, this.transform.getState(), svgRect);
+
+    // Render geometry objects
+    if (this.renderer && this.project) {
+      this.renderer.render(this.project, this.transform.getState().zoom);
+    }
   }
 
   reset(): void {
     this.transform.reset();
+    this.render();
+  }
+
+  // Set project and initialize renderer
+  setProject(project: Project): void {
+    this.project = project;
+    this.renderer = new Renderer(this.worldGroup);
     this.render();
   }
 
