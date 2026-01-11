@@ -7,6 +7,8 @@ import { ToolManager } from '../tools/ToolManager';
 import { Tool } from '../tools/Tool';
 import { Selection } from '../selection/Selection';
 import { SelectionRenderer } from '../selection/SelectionRenderer';
+import { SnapManager } from '../snapping/SnapManager';
+import { SnapIndicator } from '../snapping/SnapIndicator';
 
 export class Viewport {
   private svg: SVGSVGElement;
@@ -22,10 +24,15 @@ export class Viewport {
   private toolManager?: ToolManager;
   private selection?: Selection;
   private selectionRenderer?: SelectionRenderer;
+  private snapManager: SnapManager;
+  private snapIndicator?: SnapIndicator;
 
   constructor(container: HTMLElement) {
     this.transform = new ViewportTransform();
     this.grid = new Grid();
+    
+    // Initialize snap system
+    this.snapManager = new SnapManager();
 
     // Create SVG
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -42,6 +49,15 @@ export class Viewport {
     this.previewGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this.previewGroup.id = 'preview';
     this.worldGroup.appendChild(this.previewGroup);
+    
+    // Initialize snap indicator
+    this.snapIndicator = new SnapIndicator(this.worldGroup);
+
+    // Listen to snap changes to update grid
+    this.snapManager.onChange(() => {
+      this.grid.setSpacing(this.snapManager.getGridSpacing());
+      this.render();
+    });
 
     container.appendChild(this.svg);
 
@@ -190,6 +206,14 @@ export class Viewport {
 
   getSelection(): Selection | undefined {
     return this.selection;
+  }
+
+  getSnapManager(): SnapManager {
+    return this.snapManager;
+  }
+
+  getSnapIndicator(): SnapIndicator | undefined {
+    return this.snapIndicator;
   }
 
   getWorldGroup(): SVGGElement {

@@ -2,6 +2,8 @@ import { Tool, ToolMouseEvent } from './Tool';
 import { Project } from '../model/Project';
 import { GeometryObject } from '../geometry/GeometryObject';
 import { GeometryType, Point } from '../geometry/types';
+import { SnapManager } from '../snapping/SnapManager';
+import { SnapIndicator } from '../snapping/SnapIndicator';
 
 enum CircleToolState {
   WAITING_FOR_CENTER,
@@ -17,11 +19,26 @@ export class CircleTool implements Tool {
   private state: CircleToolState = CircleToolState.WAITING_FOR_CENTER;
   private centerPoint: Point | null = null;
   private currentPoint: Point | null = null;
+  private snapManager: SnapManager;
+  private snapIndicator: SnapIndicator;
+  private currentZoom: number = 1.0;
 
-  constructor(project: Project, previewGroup: SVGGElement, onUpdate: () => void) {
+  constructor(
+    project: Project,
+    previewGroup: SVGGElement,
+    snapManager: SnapManager,
+    snapIndicator: SnapIndicator,
+    onUpdate: () => void
+  ) {
     this.project = project;
     this.previewGroup = previewGroup;
+    this.snapManager = snapManager;
+    this.snapIndicator = snapIndicator;
     this.onUpdate = onUpdate;
+  }
+
+  setZoom(zoom: number): void {
+    this.currentZoom = zoom;
   }
 
   onActivate(): void {
@@ -31,6 +48,7 @@ export class CircleTool implements Tool {
 
   onDeactivate(): void {
     this.reset();
+    this.snapIndicator.hide();
   }
 
   onMouseDown(_event: ToolMouseEvent): void {
@@ -38,7 +56,17 @@ export class CircleTool implements Tool {
   }
 
   onMouseMove(event: ToolMouseEvent): void {
-    this.currentPoint = event.worldPos;
+    // Apply snapping (only for center point)
+    if (this.state === CircleToolState.WAITING_FOR_CENTER) {
+      const snapResult = this.snapManager.snap(event.worldPos);
+      this.currentPoint = snapResult.point;
+      this.snapIndicator.show(snapResult, this.currentZoom);
+    } else {
+      // For radius, use raw position (radius itself doesn't snap)
+      this.currentPoint = event.worldPos;
+      this.snapIndicator.hide();
+    }
+    
     this.renderPreview();
   }
 
@@ -48,9 +76,16 @@ export class CircleTool implements Tool {
 
   onMouseClick(event: ToolMouseEvent): void {
     if (this.state === CircleToolState.WAITING_FOR_CENTER) {
-      this.centerPoint = { x: event.worldPos.x, y: event.worldPos.y };
+      // Apply snapping to center
+      const snapResult = this.snapManager.snap(event.worldPos);
+      this.centerPoint = snapResult.point;
       this.state = CircleToolState.WAITING_FOR_RADIUS;
-      console.log(`Center set at (${event.worldPos.x.toFixed(1)}, ${event.worldPos.y.toFixed(1)}) - click to set radius`);
+      
+      if (snapResult.snapped) {
+        console.log(`Center set at (${snapResult.point.x}, ${snapResult.point.y}) [SNAPPED] - click to set radius`);
+      } else {
+        console.log(`Center set at (${snapResult.point.x.toFixed(1)}, ${snapResult.point.y.toFixed(1)}) - click to set radius`);
+      }
     } else if (this.state === CircleToolState.WAITING_FOR_RADIUS && this.centerPoint) {
       const radius = this.calculateDistance(this.centerPoint, event.worldPos);
       

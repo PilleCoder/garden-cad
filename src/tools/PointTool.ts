@@ -2,6 +2,8 @@ import { Tool, ToolMouseEvent } from './Tool';
 import { Project } from '../model/Project';
 import { GeometryObject } from '../geometry/GeometryObject';
 import { GeometryType, Point } from '../geometry/types';
+import { SnapManager } from '../snapping/SnapManager';
+import { SnapIndicator } from '../snapping/SnapIndicator';
 
 export class PointTool implements Tool {
   readonly name = 'point';
@@ -10,11 +12,26 @@ export class PointTool implements Tool {
   private onUpdate: () => void;
   private previewPoint: Point | null = null;
   private previewGroup: SVGGElement;
+  private snapManager: SnapManager;
+  private snapIndicator: SnapIndicator;
+  private currentZoom: number = 1.0;
 
-  constructor(project: Project, previewGroup: SVGGElement, onUpdate: () => void) {
+  constructor(
+    project: Project,
+    previewGroup: SVGGElement,
+    snapManager: SnapManager,
+    snapIndicator: SnapIndicator,
+    onUpdate: () => void
+  ) {
     this.project = project;
     this.previewGroup = previewGroup;
+    this.snapManager = snapManager;
+    this.snapIndicator = snapIndicator;
     this.onUpdate = onUpdate;
+  }
+
+  setZoom(zoom: number): void {
+    this.currentZoom = zoom;
   }
 
   onActivate(): void {
@@ -23,6 +40,7 @@ export class PointTool implements Tool {
 
   onDeactivate(): void {
     this.clearPreview();
+    this.snapIndicator.hide();
   }
 
   onMouseDown(_event: ToolMouseEvent): void {
@@ -30,8 +48,13 @@ export class PointTool implements Tool {
   }
 
   onMouseMove(event: ToolMouseEvent): void {
-    // Update preview
-    this.previewPoint = event.worldPos;
+    // Apply snapping
+    const snapResult = this.snapManager.snap(event.worldPos);
+    this.previewPoint = snapResult.point;
+    
+    // Show snap indicator
+    this.snapIndicator.show(snapResult, this.currentZoom);
+    
     this.renderPreview();
   }
 
@@ -40,14 +63,16 @@ export class PointTool implements Tool {
   }
 
   onMouseClick(event: ToolMouseEvent): void {
-    // Create point at click location
+    // Apply snapping to final position
+    const snapResult = this.snapManager.snap(event.worldPos);
+    
     const id = this.generateId('point');
     const point = new GeometryObject(
       id,
       'default',
       {
         type: GeometryType.POINT,
-        position: { x: event.worldPos.x, y: event.worldPos.y }
+        position: snapResult.point
       },
       { stroke: '#333333', strokeWidth: 2 },
       { name: `Point ${id}`, category: 'reference' }
@@ -55,7 +80,12 @@ export class PointTool implements Tool {
 
     this.project.addObject(point);
     this.onUpdate();
-    console.log(`Created point at (${event.worldPos.x.toFixed(1)}, ${event.worldPos.y.toFixed(1)})`);
+    
+    if (snapResult.snapped) {
+      console.log(`Created point at (${snapResult.point.x}, ${snapResult.point.y}) [SNAPPED]`);
+    } else {
+      console.log(`Created point at (${snapResult.point.x.toFixed(1)}, ${snapResult.point.y.toFixed(1)})`);
+    }
   }
 
   getCursor(): string {

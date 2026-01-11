@@ -2,6 +2,8 @@ import { Tool, ToolMouseEvent } from './Tool';
 import { Project } from '../model/Project';
 import { GeometryObject } from '../geometry/GeometryObject';
 import { GeometryType, Point } from '../geometry/types';
+import { SnapManager } from '../snapping/SnapManager';
+import { SnapIndicator } from '../snapping/SnapIndicator';
 
 enum LineToolState {
   WAITING_FOR_START,
@@ -17,11 +19,26 @@ export class LineTool implements Tool {
   private state: LineToolState = LineToolState.WAITING_FOR_START;
   private startPoint: Point | null = null;
   private currentPoint: Point | null = null;
+  private snapManager: SnapManager;
+  private snapIndicator: SnapIndicator;
+  private currentZoom: number = 1.0;
 
-  constructor(project: Project, previewGroup: SVGGElement, onUpdate: () => void) {
+  constructor(
+    project: Project,
+    previewGroup: SVGGElement,
+    snapManager: SnapManager,
+    snapIndicator: SnapIndicator,
+    onUpdate: () => void
+  ) {
     this.project = project;
     this.previewGroup = previewGroup;
+    this.snapManager = snapManager;
+    this.snapIndicator = snapIndicator;
     this.onUpdate = onUpdate;
+  }
+
+  setZoom(zoom: number): void {
+    this.currentZoom = zoom;
   }
 
   onActivate(): void {
@@ -31,6 +48,7 @@ export class LineTool implements Tool {
 
   onDeactivate(): void {
     this.reset();
+    this.snapIndicator.hide();
   }
 
   onMouseDown(_event: ToolMouseEvent): void {
@@ -38,7 +56,13 @@ export class LineTool implements Tool {
   }
 
   onMouseMove(event: ToolMouseEvent): void {
-    this.currentPoint = event.worldPos;
+    // Apply snapping
+    const snapResult = this.snapManager.snap(event.worldPos);
+    this.currentPoint = snapResult.point;
+    
+    // Show snap indicator
+    this.snapIndicator.show(snapResult, this.currentZoom);
+    
     this.renderPreview();
   }
 
@@ -47,10 +71,18 @@ export class LineTool implements Tool {
   }
 
   onMouseClick(event: ToolMouseEvent): void {
+    // Apply snapping
+    const snapResult = this.snapManager.snap(event.worldPos);
+    
     if (this.state === LineToolState.WAITING_FOR_START) {
-      this.startPoint = { x: event.worldPos.x, y: event.worldPos.y };
+      this.startPoint = snapResult.point;
       this.state = LineToolState.WAITING_FOR_END;
-      console.log(`Start point set at (${event.worldPos.x.toFixed(1)}, ${event.worldPos.y.toFixed(1)}) - click end point`);
+      
+      if (snapResult.snapped) {
+        console.log(`Start point set at (${snapResult.point.x}, ${snapResult.point.y}) [SNAPPED] - click end point`);
+      } else {
+        console.log(`Start point set at (${snapResult.point.x.toFixed(1)}, ${snapResult.point.y.toFixed(1)}) - click end point`);
+      }
     } else if (this.state === LineToolState.WAITING_FOR_END && this.startPoint) {
       // Create line
       const id = this.generateId('line');
@@ -60,7 +92,7 @@ export class LineTool implements Tool {
         {
           type: GeometryType.LINE,
           start: this.startPoint,
-          end: { x: event.worldPos.x, y: event.worldPos.y }
+          end: snapResult.point
         },
         { stroke: '#333333', strokeWidth: 2 },
         { name: `Line ${id}` }
@@ -69,8 +101,12 @@ export class LineTool implements Tool {
       this.project.addObject(line);
       this.onUpdate();
       
-      const length = this.calculateDistance(this.startPoint, event.worldPos);
-      console.log(`Created line, length: ${length.toFixed(1)} cm`);
+      const length = this.calculateDistance(this.startPoint, snapResult.point);
+      if (snapResult.snapped) {
+        console.log(`Created line, length: ${length.toFixed(1)} cm [END SNAPPED]`);
+      } else {
+        console.log(`Created line, length: ${length.toFixed(1)} cm`);
+      }
       
       this.reset();
     }
