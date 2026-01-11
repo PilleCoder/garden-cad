@@ -4,6 +4,7 @@ import { GeometryObject } from '../geometry/GeometryObject';
 import { GeometryType, Point } from '../geometry/types';
 import { SnapManager } from '../snapping/SnapManager';
 import { SnapIndicator } from '../snapping/SnapIndicator';
+import { LayerManager } from '../model/LayerManager';
 
 enum LineToolState {
   WAITING_FOR_START,
@@ -21,6 +22,7 @@ export class LineTool implements Tool {
   private currentPoint: Point | null = null;
   private snapManager: SnapManager;
   private snapIndicator: SnapIndicator;
+  private layerManager: LayerManager;
   private currentZoom: number = 1.0;
 
   constructor(
@@ -28,12 +30,14 @@ export class LineTool implements Tool {
     previewGroup: SVGGElement,
     snapManager: SnapManager,
     snapIndicator: SnapIndicator,
+    layerManager: LayerManager,
     onUpdate: () => void
   ) {
     this.project = project;
     this.previewGroup = previewGroup;
     this.snapManager = snapManager;
     this.snapIndicator = snapIndicator;
+    this.layerManager = layerManager;
     this.onUpdate = onUpdate;
   }
 
@@ -85,10 +89,11 @@ export class LineTool implements Tool {
       }
     } else if (this.state === LineToolState.WAITING_FOR_END && this.startPoint) {
       // Create line
+      const activeLayerId = this.layerManager.getActiveLayerId() || 'default';
       const id = this.generateId('line');
       const line = new GeometryObject(
         id,
-        'default',
+        activeLayerId,
         {
           type: GeometryType.LINE,
           start: this.startPoint,

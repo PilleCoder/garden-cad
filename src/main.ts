@@ -6,8 +6,10 @@ import { SelectTool } from './tools/SelectTool';
 import { PointTool } from './tools/PointTool';
 import { LineTool } from './tools/LineTool';
 import { CircleTool } from './tools/CircleTool';
+import { LayerManager } from './model/LayerManager';
+import { LayerPanel } from './ui/LayerPanel';
 
-console.log('GardenCAD v0.5 - Drawing Tools');
+console.log('GardenCAD v0.7 - Layer System');
 
 const app = document.getElementById('app');
 if (!app) {
@@ -40,7 +42,11 @@ app.innerHTML = `
       </div>
       <button id="reset-view" style="margin-left: auto;">Reset View</button>
     </div>
-    <div id="viewport-container" style="flex: 1; position: relative;"></div>
+    <div style="display: flex; flex: 1; overflow: hidden;">
+      <div id="layer-panel" style="width: 250px; background: white; border-right: 1px solid #ccc; overflow-y: auto;">
+      </div>
+      <div id="viewport-container" style="flex: 1; position: relative;"></div>
+    </div>
     <div style="padding: 8px; background: #f0f0f0; font-size: 12px; font-family: monospace; display: flex; justify-content: space-between;" id="status-bar">
       <span id="status-text">Select tool active - click to select, drag to move</span>
       <span id="snap-status" style="color: #0066ff; font-weight: bold;">SNAP: ON (10 cm)</span>
@@ -102,7 +108,7 @@ const project = new Project();
 // Origin marker (0,0)
 project.addObject(new GeometryObject(
   'origin',
-  'default',
+  'reference',
   { type: GeometryType.POINT, position: { x: 0, y: 0 } },
   { stroke: '#ff0000', strokeWidth: 3 },
   { name: 'Origin', category: 'reference' }
@@ -111,7 +117,7 @@ project.addObject(new GeometryObject(
 // Property boundary (rectangle as lines) - 2000cm x 1500cm (20m x 15m)
 project.addObject(new GeometryObject(
   'boundary-north',
-  'default',
+  'property',
   { type: GeometryType.LINE, start: { x: 0, y: 0 }, end: { x: 2000, y: 0 } },
   { stroke: '#333333', strokeWidth: 3 },
   { name: 'North Boundary' }
@@ -119,7 +125,7 @@ project.addObject(new GeometryObject(
 
 project.addObject(new GeometryObject(
   'boundary-east',
-  'default',
+  'property',
   { type: GeometryType.LINE, start: { x: 2000, y: 0 }, end: { x: 2000, y: 1500 } },
   { stroke: '#333333', strokeWidth: 3 },
   { name: 'East Boundary' }
@@ -127,7 +133,7 @@ project.addObject(new GeometryObject(
 
 project.addObject(new GeometryObject(
   'boundary-south',
-  'default',
+  'property',
   { type: GeometryType.LINE, start: { x: 2000, y: 1500 }, end: { x: 0, y: 1500 } },
   { stroke: '#333333', strokeWidth: 3 },
   { name: 'South Boundary' }
@@ -135,7 +141,7 @@ project.addObject(new GeometryObject(
 
 project.addObject(new GeometryObject(
   'boundary-west',
-  'default',
+  'property',
   { type: GeometryType.LINE, start: { x: 0, y: 1500 }, end: { x: 0, y: 0 } },
   { stroke: '#333333', strokeWidth: 3 },
   { name: 'West Boundary' }
@@ -144,7 +150,7 @@ project.addObject(new GeometryObject(
 // Apple tree (circle) - 150cm radius (3m diameter)
 project.addObject(new GeometryObject(
   'tree-apple-1',
-  'default',
+  'vegetation',
   { type: GeometryType.CIRCLE, center: { x: 500, y: 400 }, radius: 150 },
   { stroke: '#228B22', strokeWidth: 2, fill: '#90EE90', opacity: 0.3 },
   { name: 'Apple Tree', category: 'vegetation' }
@@ -153,7 +159,7 @@ project.addObject(new GeometryObject(
 // Cherry tree - 120cm radius
 project.addObject(new GeometryObject(
   'tree-cherry-1',
-  'default',
+  'vegetation',
   { type: GeometryType.CIRCLE, center: { x: 1200, y: 600 }, radius: 120 },
   { stroke: '#8B4513', strokeWidth: 2, fill: '#FFB6C1', opacity: 0.3 },
   { name: 'Cherry Tree', category: 'vegetation' }
@@ -162,7 +168,7 @@ project.addObject(new GeometryObject(
 // Path (line) - 80cm wide
 project.addObject(new GeometryObject(
   'path-main',
-  'default',
+  'hardscape',
   { type: GeometryType.LINE, start: { x: 100, y: 100 }, end: { x: 1800, y: 1400 } },
   { stroke: '#A0826D', strokeWidth: 80 },
   { name: 'Main Path', category: 'hardscape' }
@@ -171,7 +177,7 @@ project.addObject(new GeometryObject(
 // Well (point)
 project.addObject(new GeometryObject(
   'well-1',
-  'default',
+  'utilities',
   { type: GeometryType.POINT, position: { x: 1600, y: 300 } },
   { stroke: '#4169E1', strokeWidth: 5 },
   { name: 'Well', category: 'utility' }
@@ -183,7 +189,7 @@ for (let x = 0; x <= 2000; x += 500) {
     if (x === 0 && y === 0) continue; // Skip origin (already added)
     project.addObject(new GeometryObject(
       `ref-${x}-${y}`,
-      'default',
+      'reference',
       { type: GeometryType.POINT, position: { x, y } },
       { stroke: '#999999', strokeWidth: 1 },
       { name: `Reference (${x}, ${y})` }
@@ -195,11 +201,26 @@ for (let x = 0; x <= 2000; x += 500) {
 const viewport = new Viewport(container);
 viewport.setProject(project);
 
+// Initialize layer system
+const layerManager = new LayerManager();
+
+// Set layer manager on renderer
+const renderer = viewport.getRenderer();
+if (renderer) {
+  renderer.setLayerManager(layerManager);
+}
+
+// Initialize layer panel
+const layerPanelContainer = document.getElementById('layer-panel');
+if (layerPanelContainer) {
+  new LayerPanel(layerPanelContainer, layerManager, () => viewport.render());
+}
+
 // Get snap manager and indicator
 const snapManager = viewport.getSnapManager();
 const snapIndicator = viewport.getSnapIndicator()!;
 
-// Initialize all tools with snap support
+// Initialize all tools with snap support and layer manager
 const selectTool = new SelectTool(
   project,
   viewport.getSelection()!,
@@ -207,12 +228,14 @@ const selectTool = new SelectTool(
   snapIndicator,
   () => viewport.refresh()
 );
+selectTool.setLayerManager(layerManager);
 
 const pointTool = new PointTool(
   project,
   viewport.getPreviewGroup(),
   snapManager,
   snapIndicator,
+  layerManager,
   () => viewport.refresh()
 );
 
@@ -221,6 +244,7 @@ const lineTool = new LineTool(
   viewport.getPreviewGroup(),
   snapManager,
   snapIndicator,
+  layerManager,
   () => viewport.refresh()
 );
 
@@ -229,6 +253,7 @@ const circleTool = new CircleTool(
   viewport.getPreviewGroup(),
   snapManager,
   snapIndicator,
+  layerManager,
   () => viewport.refresh()
 );
 
@@ -333,9 +358,10 @@ document.addEventListener('keydown', (e) => {
 });
 
 console.log('All drawing tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle, G=Toggle Snap');
+console.log('Layer system initialized with 6 default layers');
 
 document.getElementById('reset-view')?.addEventListener('click', () => {
   viewport.reset();
 });
 
-console.log(`Loaded ${project.getAllObjects().length} objects`);
+console.log(`Loaded ${project.getAllObjects().length} objects across ${layerManager.getAllLayers().length} layers`);
