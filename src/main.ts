@@ -12,8 +12,12 @@ import { LayerManager } from './model/LayerManager';
 import { LayerPanel } from './ui/LayerPanel';
 import { MeasurementManager } from './measurement/MeasurementManager';
 import { MeasurementRenderer } from './measurement/MeasurementRenderer';
+import { ProjectSerializer } from './persistence/ProjectSerializer';
+import { IndexedDBAdapter } from './persistence/IndexedDBAdapter';
+import { FileAdapter } from './persistence/FileAdapter';
+import { SaveIndicator } from './ui/SaveIndicator';
 
-console.log('GardenCAD v0.8 - Measurement Tools');
+console.log('GardenCAD v0.9 - Persistence Layer');
 
 const app = document.getElementById('app');
 if (!app) {
@@ -45,6 +49,11 @@ app.innerHTML = `
         <button id="snap-toggle" class="snap-btn active" title="Toggle snap (G)">
           <span id="snap-icon">🧲</span> Snap
         </button>
+      </div>
+      <div style="display: flex; gap: 5px; align-items: center; margin-left: 20px; border-left: 1px solid #555; padding-left: 20px;">
+        <button id="save-btn" title="Save project (Ctrl+S)">💾 Save</button>
+        <button id="export-btn" title="Export to file">📥 Export</button>
+        <button id="import-btn" title="Import from file">📤 Import</button>
       </div>
       <button id="clear-measurements" style="margin-left: 10px;">Clear Measurements</button>
       <button id="reset-view" style="margin-left: auto;">Reset View</button>
@@ -211,6 +220,9 @@ viewport.setProject(project);
 // Initialize layer system
 const layerManager = new LayerManager();
 
+// Forward declaration for persistence (will be defined later)
+let markModified: () => void;
+
 // Set layer manager on renderer
 const renderer = viewport.getRenderer();
 if (renderer) {
@@ -220,7 +232,10 @@ if (renderer) {
 // Initialize layer panel
 const layerPanelContainer = document.getElementById('layer-panel');
 if (layerPanelContainer) {
-  new LayerPanel(layerPanelContainer, layerManager, () => viewport.render());
+  new LayerPanel(layerPanelContainer, layerManager, () => {
+    viewport.render();
+    markModified();
+  });
 }
 
 // Get snap manager and indicator
@@ -240,11 +255,13 @@ measurementRenderer.setLayerManager(layerManager);
 // Listen to measurement changes to update renderer
 measurementManager.onChange(() => {
   measurementRenderer.render(viewport.getZoom());
+  markModified();
 });
 
 // Listen to layer changes to update measurement visibility
 layerManager.onChange(() => {
   measurementRenderer.render(viewport.getZoom());
+  markModified();
 });
 
 // Initialize all tools with snap support and layer manager
@@ -253,7 +270,10 @@ const selectTool = new SelectTool(
   viewport.getSelection()!,
   snapManager,
   snapIndicator,
-  () => viewport.refresh()
+  () => {
+    viewport.refresh();
+    markModified();
+  }
 );
 selectTool.setLayerManager(layerManager);
 
@@ -263,7 +283,10 @@ const pointTool = new PointTool(
   snapManager,
   snapIndicator,
   layerManager,
-  () => viewport.refresh()
+  () => {
+    viewport.refresh();
+    markModified();
+  }
 );
 
 const lineTool = new LineTool(
@@ -272,7 +295,10 @@ const lineTool = new LineTool(
   snapManager,
   snapIndicator,
   layerManager,
-  () => viewport.refresh()
+  () => {
+    viewport.refresh();
+    markModified();
+  }
 );
 
 const circleTool = new CircleTool(
@@ -281,7 +307,10 @@ const circleTool = new CircleTool(
   snapManager,
   snapIndicator,
   layerManager,
-  () => viewport.refresh()
+  () => {
+    viewport.refresh();
+    markModified();
+  }
 );
 
 const measureTool = new MeasureTool(
@@ -383,6 +412,13 @@ viewport.getSVG().addEventListener('dblclick', () => {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
+  // Ctrl+S to save
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveProject(false);
+    return;
+  }
+  
   // ESC key handling
   if (e.key === 'Escape') {
     if (activeTool === 'line') {
@@ -433,3 +469,195 @@ document.getElementById('reset-view')?.addEventListener('click', () => {
 });
 
 console.log(`Loaded ${project.getAllObjects().length} objects across ${layerManager.getAllLayers().length} layers`);
+
+// ============================================================
+// PERSISTENCE SYSTEM
+// ============================================================
+
+const storage = new IndexedDBAdapter();
+const saveIndicator = new SaveIndicator(document.body);
+let currentProjectId = 'garden-main';
+let currentProjectName = 'My Garden Plan';
+let hasUnsavedChanges = false;
+let autoSaveTimer: number | null = null;
+
+/**
+ * Mark project as modified and schedule auto-save
+ */
+markModified = function(): void {
+  hasUnsavedChanges = true;
+  
+  // Reset auto-save timer
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+  }
+  
+  // Auto-save after 30 seconds of inactivity
+  autoSaveTimer = window.setTimeout(() => {
+    if (hasUnsavedChanges) {
+      saveProject(true);
+    }
+  }, 30000);
+}
+
+/**
+ * Save project to IndexedDB
+ */
+async function saveProject(isAutoSave: boolean = false): Promise<void> {
+  try {
+    if (!isAutoSave) {
+      saveIndicator.showSaving();
+    }
+
+    const projectJSON = ProjectSerializer.serialize(
+      currentProjectId,
+      currentProjectName,
+      project,
+      layerManager,
+      measurementManager
+    );
+
+    await storage.save(currentProjectId, projectJSON);
+    
+    hasUnsavedChanges = false;
+    
+    if (isAutoSave) {
+      console.log('Auto-saved');
+    } else {
+      saveIndicator.showSaved();
+      console.log('Project saved');
+    }
+  } catch (error) {
+    console.error('Save failed:', error);
+    saveIndicator.showError('Save failed');
+  }
+}
+
+/**
+ * Load project from IndexedDB
+ */
+async function loadProject(): Promise<void> {
+  try {
+    const exists = await storage.exists(currentProjectId);
+    
+    if (!exists) {
+      console.log('No saved project found, starting fresh');
+      return;
+    }
+
+    const projectJSON = await storage.load(currentProjectId);
+    
+    if (!projectJSON) {
+      console.log('No saved project data');
+      return;
+    }
+
+    if (!ProjectSerializer.validate(projectJSON)) {
+      console.error('Invalid project data');
+      return;
+    }
+
+    ProjectSerializer.deserialize(
+      projectJSON,
+      project,
+      layerManager,
+      measurementManager
+    );
+
+    currentProjectName = projectJSON.metadata.name;
+    hasUnsavedChanges = false;
+    viewport.render();
+    
+    console.log(`Project loaded: ${currentProjectName}`);
+  } catch (error) {
+    console.error('Load failed:', error);
+  }
+}
+
+/**
+ * Export project to downloadable JSON file
+ */
+async function exportToFile(): Promise<void> {
+  try {
+    const projectJSON = ProjectSerializer.serialize(
+      currentProjectId,
+      currentProjectName,
+      project,
+      layerManager,
+      measurementManager
+    );
+
+    const filename = `${currentProjectName.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.json`;
+    FileAdapter.exportToFile(projectJSON, filename);
+    
+    console.log(`Exported to ${filename}`);
+  } catch (error) {
+    console.error('Export failed:', error);
+  }
+}
+
+/**
+ * Import project from user-selected JSON file
+ */
+async function importFromFile(): Promise<void> {
+  try {
+    const projectJSON = await FileAdapter.importFromFile();
+    
+    if (!ProjectSerializer.validate(projectJSON)) {
+      alert('Invalid project file');
+      return;
+    }
+
+    const confirmImport = confirm(
+      `Import project "${projectJSON.metadata.name}"?\nThis will replace your current work.`
+    );
+    
+    if (!confirmImport) return;
+
+    ProjectSerializer.deserialize(
+      projectJSON,
+      project,
+      layerManager,
+      measurementManager
+    );
+
+    currentProjectId = projectJSON.projectId;
+    currentProjectName = projectJSON.metadata.name;
+    hasUnsavedChanges = true;
+    viewport.render();
+    
+    console.log(`Imported project: ${currentProjectName}`);
+    
+    // Save imported project
+    await saveProject();
+  } catch (error) {
+    console.error('Import failed:', error);
+    if (error instanceof Error) {
+      alert(`Import failed: ${error.message}`);
+    }
+  }
+}
+
+// Initialize storage and load saved project
+storage.initialize().then(() => {
+  console.log('Storage initialized');
+  loadProject();
+}).catch(err => {
+  console.error('Storage initialization failed:', err);
+});
+
+// Wire up save/load buttons
+document.getElementById('save-btn')?.addEventListener('click', () => saveProject(false));
+document.getElementById('export-btn')?.addEventListener('click', exportToFile);
+document.getElementById('import-btn')?.addEventListener('click', importFromFile);
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', (e) => {
+  if (hasUnsavedChanges) {
+    e.preventDefault();
+    e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+    return e.returnValue;
+  }
+});
+
+console.log('Persistence system loaded. Press Ctrl+S to save.');
