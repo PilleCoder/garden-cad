@@ -1,0 +1,1 @@
+console.log('GardenCAD - Ready for slice-01');
