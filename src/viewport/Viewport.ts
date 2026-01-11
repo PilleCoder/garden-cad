@@ -11,6 +11,7 @@ import { SelectionRenderer } from '../selection/SelectionRenderer';
 export class Viewport {
   private svg: SVGSVGElement;
   private worldGroup: SVGGElement;
+  private previewGroup: SVGGElement;
   private transform: ViewportTransform;
   private grid: Grid;
   private isPanning: boolean = false;
@@ -36,6 +37,11 @@ export class Viewport {
     this.worldGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this.worldGroup.id = 'world';
     this.svg.appendChild(this.worldGroup);
+
+    // Create preview group (above objects, below selection)
+    this.previewGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    this.previewGroup.id = 'preview';
+    this.worldGroup.appendChild(this.previewGroup);
 
     container.appendChild(this.svg);
 
@@ -117,6 +123,37 @@ export class Viewport {
     if (this.selectionRenderer) {
       this.selectionRenderer.render(this.transform.getState().zoom);
     }
+
+    // Scale preview elements for proper display
+    this.scalePreviewElements(this.transform.getState().zoom);
+  }
+
+  private scalePreviewElements(zoom: number): void {
+    // Scale text and stroke-widths in preview for visibility
+    const texts = this.previewGroup.querySelectorAll('text');
+    texts.forEach(text => {
+      text.setAttribute('font-size', (14 / zoom).toString());
+      const currentStrokeWidth = text.getAttribute('stroke-width');
+      if (currentStrokeWidth) {
+        text.setAttribute('stroke-width', (parseFloat(currentStrokeWidth) / zoom).toString());
+      }
+    });
+    
+    const lines = this.previewGroup.querySelectorAll('line');
+    lines.forEach(line => {
+      const width = line.getAttribute('stroke-width');
+      if (width && !line.hasAttribute('data-no-scale')) {
+        line.setAttribute('stroke-width', (parseFloat(width) / zoom).toString());
+      }
+    });
+    
+    const circles = this.previewGroup.querySelectorAll('circle');
+    circles.forEach(circle => {
+      const r = circle.getAttribute('r');
+      if (r && parseFloat(r) < 10) { // Small circles (handles, etc.)
+        circle.setAttribute('r', (parseFloat(r) / zoom).toString());
+      }
+    });
   }
 
   // Public render method for tools to trigger updates
@@ -157,5 +194,9 @@ export class Viewport {
 
   getWorldGroup(): SVGGElement {
     return this.worldGroup;
+  }
+
+  getPreviewGroup(): SVGGElement {
+    return this.previewGroup;
   }
 }
