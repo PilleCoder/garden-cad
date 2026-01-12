@@ -6,6 +6,7 @@ import { GeometryType, Point, PointGeometry, LineGeometry, CircleGeometry } from
 import { SnapManager } from '../snapping/SnapManager';
 import { SnapIndicator } from '../snapping/SnapIndicator';
 import { LayerManager } from '../model/LayerManager';
+import { ContextMenu } from '../ui/ContextMenu';
 
 export class SelectTool implements Tool {
   readonly name = 'select';
@@ -21,6 +22,7 @@ export class SelectTool implements Tool {
   private snapIndicator: SnapIndicator;
   private layerManager?: LayerManager;
   private currentZoom: number = 1.0;
+  private contextMenu?: ContextMenu;
 
   constructor(
     project: Project,
@@ -34,6 +36,10 @@ export class SelectTool implements Tool {
     this.snapManager = snapManager;
     this.snapIndicator = snapIndicator;
     this.onUpdate = onUpdate;
+  }
+
+  setContextMenu(contextMenu: ContextMenu): void {
+    this.contextMenu = contextMenu;
   }
 
   setLayerManager(layerManager: LayerManager): void {
@@ -262,5 +268,61 @@ export class SelectTool implements Tool {
     }
 
     return obj.clone({ geometry: newGeometry });
+  }
+
+  onContextMenu(event: ToolMouseEvent): void {
+    // Check if right-clicking on an object
+    const objects = this.project.getAllObjects();
+    let hitObject: GeometryObject | null = null;
+
+    // Reverse order to select topmost object
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const obj = objects[i];
+      if (!obj) continue;
+      
+      // Skip if layer is locked or hidden
+      if (this.layerManager) {
+        if (!this.layerManager.isLayerVisible(obj.layerId)) continue;
+      }
+      
+      if (this.hitTest(obj, event.worldPos)) {
+        hitObject = obj;
+        break;
+      }
+    }
+
+    if (hitObject && this.contextMenu) {
+      // Select the object if not already selected
+      if (this.selection.getFirstSelected() !== hitObject.id) {
+        this.selection.select(hitObject.id);
+        this.onUpdate();
+      }
+
+      const isLocked = this.layerManager?.isLayerLocked(hitObject.layerId) || false;
+
+      // Show context menu
+      this.contextMenu.show(event.clientPos.x, event.clientPos.y, [
+        {
+          label: 'Delete',
+          icon: '🗑️',
+          danger: true,
+          action: () => {
+            if (isLocked) {
+              console.log('Cannot delete object on locked layer');
+              return;
+            }
+            
+            const objId = hitObject!.id;
+            const objName = hitObject!.metadata.name || hitObject!.id;
+            
+            this.project.removeObject(objId);
+            this.selection.deselect();
+            this.onUpdate();
+            
+            console.log(`Deleted: ${objName}`);
+          }
+        }
+      ]);
+    }
   }
 }

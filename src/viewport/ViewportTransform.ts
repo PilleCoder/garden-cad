@@ -46,6 +46,14 @@ export class ViewportTransform {
     this.state = { panX: 0, panY: 0, zoom: 1.0, rotation: 0 };
   }
 
+  // Set state directly
+  setState(state: Partial<ViewportState>): void {
+    if (state.panX !== undefined) this.state.panX = state.panX;
+    if (state.panY !== undefined) this.state.panY = state.panY;
+    if (state.zoom !== undefined) this.state.zoom = state.zoom;
+    if (state.rotation !== undefined) this.state.rotation = state.rotation;
+  }
+
   // Get current state for rendering
   getState(): ViewportState {
     return { ...this.state };

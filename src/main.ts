@@ -12,8 +12,13 @@ import { LayerManager } from './model/LayerManager';
 import { LayerPanel } from './ui/LayerPanel';
 import { MeasurementManager } from './measurement/MeasurementManager';
 import { MeasurementRenderer } from './measurement/MeasurementRenderer';
+import { ProjectSerializer } from './persistence/ProjectSerializer';
+import { IndexedDBAdapter } from './persistence/IndexedDBAdapter';
+import { FileAdapter } from './persistence/FileAdapter';
+import { SaveIndicator } from './ui/SaveIndicator';
+import { ContextMenu } from './ui/ContextMenu';
 
-console.log('GardenCAD v0.8 - Measurement Tools');
+console.log('GardenCAD v0.9 - Persistence Layer');
 
 const app = document.getElementById('app');
 if (!app) {
@@ -45,6 +50,11 @@ app.innerHTML = `
         <button id="snap-toggle" class="snap-btn active" title="Toggle snap (G)">
           <span id="snap-icon">🧲</span> Snap
         </button>
+      </div>
+      <div style="display: flex; gap: 5px; align-items: center; margin-left: 20px; border-left: 1px solid #555; padding-left: 20px;">
+        <button id="save-btn" title="Save project (Ctrl+S)">💾 Save</button>
+        <button id="export-btn" title="Export to file">📥 Export</button>
+        <button id="import-btn" title="Import from file">📤 Import</button>
       </div>
       <button id="clear-measurements" style="margin-left: 10px;">Clear Measurements</button>
       <button id="reset-view" style="margin-left: auto;">Reset View</button>
@@ -107,102 +117,8 @@ if (!container) {
   throw new Error('Viewport container not found');
 }
 
-// Create project with test geometry
+// Create project (test geometry will be added after checking for saved data)
 const project = new Project();
-
-// Add test objects to demonstrate rendering and coordinate accuracy
-
-// Origin marker (0,0)
-project.addObject(new GeometryObject(
-  'origin',
-  'reference',
-  { type: GeometryType.POINT, position: { x: 0, y: 0 } },
-  { stroke: '#ff0000', strokeWidth: 3 },
-  { name: 'Origin', category: 'reference' }
-));
-
-// Property boundary (rectangle as lines) - 2000cm x 1500cm (20m x 15m)
-project.addObject(new GeometryObject(
-  'boundary-north',
-  'property',
-  { type: GeometryType.LINE, start: { x: 0, y: 0 }, end: { x: 2000, y: 0 } },
-  { stroke: '#333333', strokeWidth: 3 },
-  { name: 'North Boundary' }
-));
-
-project.addObject(new GeometryObject(
-  'boundary-east',
-  'property',
-  { type: GeometryType.LINE, start: { x: 2000, y: 0 }, end: { x: 2000, y: 1500 } },
-  { stroke: '#333333', strokeWidth: 3 },
-  { name: 'East Boundary' }
-));
-
-project.addObject(new GeometryObject(
-  'boundary-south',
-  'property',
-  { type: GeometryType.LINE, start: { x: 2000, y: 1500 }, end: { x: 0, y: 1500 } },
-  { stroke: '#333333', strokeWidth: 3 },
-  { name: 'South Boundary' }
-));
-
-project.addObject(new GeometryObject(
-  'boundary-west',
-  'property',
-  { type: GeometryType.LINE, start: { x: 0, y: 1500 }, end: { x: 0, y: 0 } },
-  { stroke: '#333333', strokeWidth: 3 },
-  { name: 'West Boundary' }
-));
-
-// Apple tree (circle) - 150cm radius (3m diameter)
-project.addObject(new GeometryObject(
-  'tree-apple-1',
-  'vegetation',
-  { type: GeometryType.CIRCLE, center: { x: 500, y: 400 }, radius: 150 },
-  { stroke: '#228B22', strokeWidth: 2, fill: '#90EE90', opacity: 0.3 },
-  { name: 'Apple Tree', category: 'vegetation' }
-));
-
-// Cherry tree - 120cm radius
-project.addObject(new GeometryObject(
-  'tree-cherry-1',
-  'vegetation',
-  { type: GeometryType.CIRCLE, center: { x: 1200, y: 600 }, radius: 120 },
-  { stroke: '#8B4513', strokeWidth: 2, fill: '#FFB6C1', opacity: 0.3 },
-  { name: 'Cherry Tree', category: 'vegetation' }
-));
-
-// Path (line) - 80cm wide
-project.addObject(new GeometryObject(
-  'path-main',
-  'hardscape',
-  { type: GeometryType.LINE, start: { x: 100, y: 100 }, end: { x: 1800, y: 1400 } },
-  { stroke: '#A0826D', strokeWidth: 80 },
-  { name: 'Main Path', category: 'hardscape' }
-));
-
-// Well (point)
-project.addObject(new GeometryObject(
-  'well-1',
-  'utilities',
-  { type: GeometryType.POINT, position: { x: 1600, y: 300 } },
-  { stroke: '#4169E1', strokeWidth: 5 },
-  { name: 'Well', category: 'utility' }
-));
-
-// Grid reference points (every 500cm)
-for (let x = 0; x <= 2000; x += 500) {
-  for (let y = 0; y <= 1500; y += 500) {
-    if (x === 0 && y === 0) continue; // Skip origin (already added)
-    project.addObject(new GeometryObject(
-      `ref-${x}-${y}`,
-      'reference',
-      { type: GeometryType.POINT, position: { x, y } },
-      { stroke: '#999999', strokeWidth: 1 },
-      { name: `Reference (${x}, ${y})` }
-    ));
-  }
-}
 
 // Initialize viewport
 const viewport = new Viewport(container);
@@ -210,6 +126,9 @@ viewport.setProject(project);
 
 // Initialize layer system
 const layerManager = new LayerManager();
+
+// Forward declaration for persistence (will be defined later)
+let markModified: () => void;
 
 // Set layer manager on renderer
 const renderer = viewport.getRenderer();
@@ -220,12 +139,18 @@ if (renderer) {
 // Initialize layer panel
 const layerPanelContainer = document.getElementById('layer-panel');
 if (layerPanelContainer) {
-  new LayerPanel(layerPanelContainer, layerManager, () => viewport.render());
+  new LayerPanel(layerPanelContainer, layerManager, () => {
+    viewport.render();
+    markModified();
+  });
 }
 
 // Get snap manager and indicator
 const snapManager = viewport.getSnapManager();
 const snapIndicator = viewport.getSnapIndicator()!;
+
+// Create context menu
+const contextMenu = new ContextMenu(document.body);
 
 // Initialize measurement system
 const measurementManager = new MeasurementManager();
@@ -240,11 +165,13 @@ measurementRenderer.setLayerManager(layerManager);
 // Listen to measurement changes to update renderer
 measurementManager.onChange(() => {
   measurementRenderer.render(viewport.getZoom());
+  markModified();
 });
 
 // Listen to layer changes to update measurement visibility
 layerManager.onChange(() => {
   measurementRenderer.render(viewport.getZoom());
+  markModified();
 });
 
 // Initialize all tools with snap support and layer manager
@@ -253,9 +180,13 @@ const selectTool = new SelectTool(
   viewport.getSelection()!,
   snapManager,
   snapIndicator,
-  () => viewport.refresh()
+  () => {
+    viewport.refresh();
+    markModified();
+  }
 );
 selectTool.setLayerManager(layerManager);
+selectTool.setContextMenu(contextMenu);
 
 const pointTool = new PointTool(
   project,
@@ -263,7 +194,10 @@ const pointTool = new PointTool(
   snapManager,
   snapIndicator,
   layerManager,
-  () => viewport.refresh()
+  () => {
+    viewport.refresh();
+    markModified();
+  }
 );
 
 const lineTool = new LineTool(
@@ -272,7 +206,10 @@ const lineTool = new LineTool(
   snapManager,
   snapIndicator,
   layerManager,
-  () => viewport.refresh()
+  () => {
+    viewport.refresh();
+    markModified();
+  }
 );
 
 const circleTool = new CircleTool(
@@ -281,7 +218,10 @@ const circleTool = new CircleTool(
   snapManager,
   snapIndicator,
   layerManager,
-  () => viewport.refresh()
+  () => {
+    viewport.refresh();
+    markModified();
+  }
 );
 
 const measureTool = new MeasureTool(
@@ -383,6 +323,13 @@ viewport.getSVG().addEventListener('dblclick', () => {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
+  // Ctrl+S to save
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveProject(false);
+    return;
+  }
+  
   // ESC key handling
   if (e.key === 'Escape') {
     if (activeTool === 'line') {
@@ -433,3 +380,338 @@ document.getElementById('reset-view')?.addEventListener('click', () => {
 });
 
 console.log(`Loaded ${project.getAllObjects().length} objects across ${layerManager.getAllLayers().length} layers`);
+
+// ============================================================
+// PERSISTENCE SYSTEM
+// ============================================================
+
+const storage = new IndexedDBAdapter();
+const saveIndicator = new SaveIndicator(document.body);
+let currentProjectId = 'garden-main';
+let currentProjectName = 'My Garden Plan';
+let hasUnsavedChanges = false;
+let autoSaveTimer: number | null = null;
+
+/**
+ * Mark project as modified and schedule auto-save
+ */
+markModified = function(): void {
+  hasUnsavedChanges = true;
+  
+  // Reset auto-save timer
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+  }
+  
+  // Auto-save after 30 seconds of inactivity
+  autoSaveTimer = window.setTimeout(() => {
+    if (hasUnsavedChanges) {
+      saveProject(true);
+    }
+  }, 30000);
+}
+
+/**
+ * Add test geometry for demo purposes
+ */
+function addTestGeometry(): void {
+  console.log('Adding test geometry (no saved project found)');
+  
+  // Origin marker (0,0)
+  project.addObject(new GeometryObject(
+    'origin',
+    'reference',
+    { type: GeometryType.POINT, position: { x: 0, y: 0 } },
+    { stroke: '#ff0000', strokeWidth: 3 },
+    { name: 'Origin', category: 'reference' }
+  ));
+
+  // Property boundary (rectangle as lines) - 2000cm x 1500cm (20m x 15m)
+  project.addObject(new GeometryObject(
+    'boundary-north',
+    'property',
+    { type: GeometryType.LINE, start: { x: 0, y: 0 }, end: { x: 2000, y: 0 } },
+    { stroke: '#333333', strokeWidth: 3 },
+    { name: 'North Boundary' }
+  ));
+
+  project.addObject(new GeometryObject(
+    'boundary-east',
+    'property',
+    { type: GeometryType.LINE, start: { x: 2000, y: 0 }, end: { x: 2000, y: 1500 } },
+    { stroke: '#333333', strokeWidth: 3 },
+    { name: 'East Boundary' }
+  ));
+
+  project.addObject(new GeometryObject(
+    'boundary-south',
+    'property',
+    { type: GeometryType.LINE, start: { x: 2000, y: 1500 }, end: { x: 0, y: 1500 } },
+    { stroke: '#333333', strokeWidth: 3 },
+    { name: 'South Boundary' }
+  ));
+
+  project.addObject(new GeometryObject(
+    'boundary-west',
+    'property',
+    { type: GeometryType.LINE, start: { x: 0, y: 1500 }, end: { x: 0, y: 0 } },
+    { stroke: '#333333', strokeWidth: 3 },
+    { name: 'West Boundary' }
+  ));
+
+  // Apple tree (circle) - 150cm radius (3m diameter)
+  project.addObject(new GeometryObject(
+    'tree-apple-1',
+    'vegetation',
+    { type: GeometryType.CIRCLE, center: { x: 500, y: 400 }, radius: 150 },
+    { stroke: '#228B22', strokeWidth: 2, fill: '#90EE90', opacity: 0.3 },
+    { name: 'Apple Tree', category: 'vegetation' }
+  ));
+
+  // Cherry tree - 120cm radius
+  project.addObject(new GeometryObject(
+    'tree-cherry-1',
+    'vegetation',
+    { type: GeometryType.CIRCLE, center: { x: 1200, y: 600 }, radius: 120 },
+    { stroke: '#8B4513', strokeWidth: 2, fill: '#FFB6C1', opacity: 0.3 },
+    { name: 'Cherry Tree', category: 'vegetation' }
+  ));
+
+  // Path (line) - 80cm wide
+  project.addObject(new GeometryObject(
+    'path-main',
+    'hardscape',
+    { type: GeometryType.LINE, start: { x: 100, y: 100 }, end: { x: 1800, y: 1400 } },
+    { stroke: '#A0826D', strokeWidth: 80 },
+    { name: 'Main Path', category: 'hardscape' }
+  ));
+
+  // Well (point)
+  project.addObject(new GeometryObject(
+    'well-1',
+    'utilities',
+    { type: GeometryType.POINT, position: { x: 1600, y: 300 } },
+    { stroke: '#4169E1', strokeWidth: 5 },
+    { name: 'Well', category: 'utility' }
+  ));
+
+  // Grid reference points (every 500cm)
+  for (let x = 0; x <= 2000; x += 500) {
+    for (let y = 0; y <= 1500; y += 500) {
+      if (x === 0 && y === 0) continue; // Skip origin (already added)
+      project.addObject(new GeometryObject(
+        `ref-${x}-${y}`,
+        'reference',
+        { type: GeometryType.POINT, position: { x, y } },
+        { stroke: '#999999', strokeWidth: 1 },
+        { name: `Reference (${x}, ${y})` }
+      ));
+    }
+  }
+  
+  viewport.refresh();
+}
+
+/**
+ * Save project to IndexedDB
+ */
+async function saveProject(isAutoSave: boolean = false): Promise<void> {
+  try {
+    if (!isAutoSave) {
+      saveIndicator.showSaving();
+    }
+
+    const projectJSON = ProjectSerializer.serialize(
+      currentProjectId,
+      currentProjectName,
+      project,
+      layerManager,
+      measurementManager
+    );
+
+    await storage.save(currentProjectId, projectJSON);
+    
+    hasUnsavedChanges = false;
+    
+    if (isAutoSave) {
+      console.log('Auto-saved');
+    } else {
+      saveIndicator.showSaved();
+      console.log('Project saved');
+    }
+  } catch (error) {
+    console.error('Save failed:', error);
+    saveIndicator.showError('Save failed');
+  }
+}
+
+/**
+ * Load project from IndexedDB
+ */
+async function loadProject(): Promise<void> {
+  try {
+    const exists = await storage.exists(currentProjectId);
+    
+    if (!exists) {
+      console.log('No saved project found, starting fresh');
+      addTestGeometry();
+      return;
+    }
+
+    const projectJSON = await storage.load(currentProjectId);
+    
+    if (!projectJSON) {
+      console.log('No saved project data');
+      addTestGeometry();
+      return;
+    }
+
+    if (!ProjectSerializer.validate(projectJSON)) {
+      console.error('Invalid project data');
+      addTestGeometry();
+      return;
+    }
+
+    // Clear selection before load
+    if (viewport.getSelection()) {
+      viewport.getSelection()!.deselect();
+    }
+
+    ProjectSerializer.deserialize(
+      projectJSON,
+      project,
+      layerManager,
+      measurementManager
+    );
+
+    currentProjectName = projectJSON.metadata.name;
+    hasUnsavedChanges = false;
+    
+    // Force complete refresh
+    viewport.refresh();
+    measurementRenderer.render(viewport.getZoom());
+    
+    console.log(`Project loaded: ${currentProjectName}`);
+    console.log(`Active objects: ${project.getAllObjects().length}`);
+  } catch (error) {
+    console.error('Load failed:', error);
+    addTestGeometry();
+  }
+}
+
+/**
+ * Export project to downloadable JSON file
+ */
+async function exportToFile(): Promise<void> {
+  try {
+    const projectJSON = ProjectSerializer.serialize(
+      currentProjectId,
+      currentProjectName,
+      project,
+      layerManager,
+      measurementManager
+    );
+
+    const filename = `${currentProjectName.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.json`;
+    FileAdapter.exportToFile(projectJSON, filename);
+    
+    console.log(`Exported to ${filename}`);
+  } catch (error) {
+    console.error('Export failed:', error);
+  }
+}
+
+/**
+ * Import project from user-selected JSON file
+ */
+async function importFromFile(): Promise<void> {
+  try {
+    console.log('Starting import process...');
+    const projectJSON = await FileAdapter.importFromFile();
+    
+    console.log('File loaded, validating...');
+    console.log('Project data:', projectJSON);
+    
+    if (!ProjectSerializer.validate(projectJSON)) {
+      alert('Invalid project file');
+      console.error('Validation failed');
+      return;
+    }
+
+    console.log('Validation passed');
+    
+    const confirmImport = confirm(
+      `Import project "${projectJSON.metadata.name}"?\nThis will replace your current work.`
+    );
+    
+    if (!confirmImport) {
+      console.log('Import cancelled by user');
+      return;
+    }
+
+    console.log('User confirmed import, clearing current project...');
+    console.log('Current objects before import:', project.getAllObjects().length);
+
+    // Clear selection before import
+    if (viewport.getSelection()) {
+      viewport.getSelection()!.deselect();
+    }
+
+    // Deserialize the imported project
+    ProjectSerializer.deserialize(
+      projectJSON,
+      project,
+      layerManager,
+      measurementManager
+    );
+
+    console.log('Deserialization complete, objects after import:', project.getAllObjects().length);
+
+    currentProjectId = projectJSON.projectId;
+    currentProjectName = projectJSON.metadata.name;
+    hasUnsavedChanges = true;
+    
+    // Fit view to imported content
+    console.log('Fitting view to imported content...');
+    viewport.fitToContent();
+    measurementRenderer.render(viewport.getZoom());
+    
+    console.log(`✓ Imported project: ${currentProjectName}`);
+    console.log(`✓ Active objects: ${project.getAllObjects().length}`);
+    
+    // Show success message
+    alert(`Successfully imported: ${currentProjectName}\nObjects: ${project.getAllObjects().length}`);
+    
+    // Save imported project
+    await saveProject();
+  } catch (error) {
+    console.error('Import failed:', error);
+    if (error instanceof Error) {
+      alert(`Import failed: ${error.message}`);
+    }
+  }
+}
+
+// Initialize storage and load saved project
+storage.initialize().then(() => {
+  console.log('Storage initialized');
+  loadProject();
+}).catch(err => {
+  console.error('Storage initialization failed:', err);
+});
+
+// Wire up save/load buttons
+document.getElementById('save-btn')?.addEventListener('click', () => saveProject(false));
+document.getElementById('export-btn')?.addEventListener('click', exportToFile);
+document.getElementById('import-btn')?.addEventListener('click', importFromFile);
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', (e) => {
+  if (hasUnsavedChanges) {
+    e.preventDefault();
+    e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+    return e.returnValue;
+  }
+});
+
+console.log('Persistence system loaded. Press Ctrl+S to save.');

@@ -32,6 +32,7 @@ export class ToolManager {
     this.svg.addEventListener('mousemove', this.handleMouseMove.bind(this));
     this.svg.addEventListener('mouseup', this.handleMouseUp.bind(this));
     this.svg.addEventListener('click', this.handleClick.bind(this));
+    this.svg.addEventListener('contextmenu', this.handleContextMenu.bind(this));
   }
 
   private convertMouseEvent(e: MouseEvent): ToolMouseEvent {
@@ -43,6 +44,7 @@ export class ToolManager {
     return {
       worldPos,
       screenPos: { x: screenX, y: screenY },
+      clientPos: { x: e.clientX, y: e.clientY },
       button: e.button,
       shiftKey: e.shiftKey,
       ctrlKey: e.ctrlKey,
@@ -77,6 +79,19 @@ export class ToolManager {
     
     const toolEvent = this.convertMouseEvent(e);
     this.activeTool.onMouseClick(toolEvent);
+  }
+
+  private handleContextMenu(e: MouseEvent): void {
+    if (!this.activeTool) return;
+    
+    // Prevent default browser context menu
+    e.preventDefault();
+    
+    // Call tool's context menu handler if it exists
+    if (this.activeTool.onContextMenu) {
+      const toolEvent = this.convertMouseEvent(e);
+      this.activeTool.onContextMenu(toolEvent);
+    }
   }
 
   private updateCursor(): void {

@@ -182,6 +182,72 @@ export class Viewport {
     this.render();
   }
 
+  // Fit viewport to show all objects
+  fitToContent(): void {
+    if (!this.project) return;
+
+    const objects = this.project.getAllObjects();
+    if (objects.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    for (const obj of objects) {
+      switch (obj.geometry.type) {
+        case 'point':
+          const pos = (obj.geometry as any).position;
+          minX = Math.min(minX, pos.x);
+          minY = Math.min(minY, pos.y);
+          maxX = Math.max(maxX, pos.x);
+          maxY = Math.max(maxY, pos.y);
+          break;
+        case 'line':
+          const start = (obj.geometry as any).start;
+          const end = (obj.geometry as any).end;
+          minX = Math.min(minX, start.x, end.x);
+          minY = Math.min(minY, start.y, end.y);
+          maxX = Math.max(maxX, start.x, end.x);
+          maxY = Math.max(maxY, start.y, end.y);
+          break;
+        case 'circle':
+          const center = (obj.geometry as any).center;
+          const radius = (obj.geometry as any).radius;
+          minX = Math.min(minX, center.x - radius);
+          minY = Math.min(minY, center.y - radius);
+          maxX = Math.max(maxX, center.x + radius);
+          maxY = Math.max(maxY, center.y + radius);
+          break;
+      }
+    }
+
+    const padding = 100; // cm
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+
+    if (contentWidth <= 0 || contentHeight <= 0) return;
+
+    const rect = this.svg.getBoundingClientRect();
+    const viewportWidth = rect.width;
+    const viewportHeight = rect.height;
+
+    const zoomX = viewportWidth / contentWidth;
+    const zoomY = viewportHeight / contentHeight;
+    const zoom = Math.min(zoomX, zoomY, 1); // Don't zoom in more than 1:1
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const panX = viewportWidth / 2 - centerX * zoom;
+    const panY = viewportHeight / 2 - centerY * zoom;
+
+    this.transform.setState({ panX, panY, zoom });
+    this.render();
+  }
+
   // Set project and initialize renderer
   setProject(project: Project): void {
     this.project = project;
