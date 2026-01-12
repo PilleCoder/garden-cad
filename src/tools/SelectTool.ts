@@ -2,7 +2,7 @@ import { Tool, ToolMouseEvent } from './Tool';
 import { Project } from '../model/Project';
 import { Selection } from '../selection/Selection';
 import { GeometryObject } from '../geometry/GeometryObject';
-import { GeometryType, Point, PointGeometry, LineGeometry, CircleGeometry } from '../geometry/types';
+import { GeometryType, Point, PointGeometry, LineGeometry, CircleGeometry, PolylineGeometry, PolygonGeometry } from '../geometry/types';
 import { SnapManager } from '../snapping/SnapManager';
 import { SnapIndicator } from '../snapping/SnapIndicator';
 import { LayerManager } from '../model/LayerManager';
@@ -189,6 +189,48 @@ export class SelectTool implements Tool {
         return dist <= geom.radius + tolerance;
       }
 
+      case GeometryType.POLYLINE: {
+        const geom = obj.geometry as PolylineGeometry;
+        const points = geom.points;
+        
+        // Check if point is near any segment
+        for (let i = 0; i < points.length - 1; i++) {
+          const dist = this.pointToLineDistance(point, points[i]!, points[i + 1]!);
+          if (dist <= tolerance + (obj.style.strokeWidth || 2) / 2) {
+            return true;
+          }
+        }
+        
+        return false;
+      }
+
+      case GeometryType.POLYGON: {
+        const geom = obj.geometry as PolygonGeometry;
+        const points = geom.points;
+        
+        // Check if point is near any segment
+        for (let i = 0; i < points.length - 1; i++) {
+          const dist = this.pointToLineDistance(point, points[i]!, points[i + 1]!);
+          if (dist <= tolerance + (obj.style.strokeWidth || 2) / 2) {
+            return true;
+          }
+        }
+        
+        // Check closing segment
+        if (points.length >= 2) {
+          const dist = this.pointToLineDistance(
+            point,
+            points[points.length - 1]!,
+            points[0]!
+          );
+          if (dist <= tolerance + (obj.style.strokeWidth || 2) / 2) {
+            return true;
+          }
+        }
+        
+        return false;
+      }
+
       default:
         return false;
     }
@@ -226,6 +268,12 @@ export class SelectTool implements Tool {
         return { ...(obj.geometry as LineGeometry).start };
       case GeometryType.CIRCLE:
         return { ...(obj.geometry as CircleGeometry).center };
+      case GeometryType.POLYLINE:
+      case GeometryType.POLYGON: {
+        // Return first point as reference position
+        const geom = obj.geometry as PolylineGeometry | PolygonGeometry;
+        return geom.points.length > 0 ? { ...geom.points[0]! } : { x: 0, y: 0 };
+      }
       default:
         return { x: 0, y: 0 };
     }
@@ -262,6 +310,19 @@ export class SelectTool implements Tool {
           center: newPos
         };
         break;
+
+      case GeometryType.POLYLINE:
+      case GeometryType.POLYGON: {
+        const geom = obj.geometry as PolylineGeometry | PolygonGeometry;
+        newGeometry = {
+          ...obj.geometry,
+          points: geom.points.map(p => ({
+            x: p.x + dx,
+            y: p.y + dy
+          }))
+        };
+        break;
+      }
 
       default:
         return obj;
