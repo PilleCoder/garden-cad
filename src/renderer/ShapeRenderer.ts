@@ -1,5 +1,5 @@
 import { GeometryObject } from '../geometry/GeometryObject';
-import { GeometryType, PointGeometry, LineGeometry, CircleGeometry } from '../geometry/types';
+import { GeometryType, PointGeometry, LineGeometry, CircleGeometry, PolylineGeometry, PolygonGeometry } from '../geometry/types';
 
 export class ShapeRenderer {
   
@@ -12,6 +12,10 @@ export class ShapeRenderer {
         return this.renderLine(obj, zoom);
       case GeometryType.CIRCLE:
         return this.renderCircle(obj, zoom);
+      case GeometryType.POLYLINE:
+        return this.renderPolyline(obj, zoom);
+      case GeometryType.POLYGON:
+        return this.renderPolygon(obj, zoom);
       default:
         throw new Error(`Unsupported geometry type: ${(obj.geometry as any).type}`);
     }
@@ -61,5 +65,38 @@ export class ShapeRenderer {
     circle.setAttribute('data-object-id', obj.id);
     
     return circle;
+  }
+
+  private renderPolyline(obj: GeometryObject, zoom: number): SVGPolylineElement {
+    const geom = obj.geometry as PolylineGeometry;
+    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    
+    const pointsStr = geom.points.map(p => `${p.x},${p.y}`).join(' ');
+    polyline.setAttribute('points', pointsStr);
+    polyline.setAttribute('fill', 'none');
+    polyline.setAttribute('stroke', obj.style.stroke || '#000000');
+    polyline.setAttribute('stroke-width', ((obj.style.strokeWidth || 2) / zoom).toString());
+    polyline.setAttribute('stroke-linejoin', 'round');
+    polyline.setAttribute('stroke-linecap', 'round');
+    polyline.setAttribute('opacity', obj.style.opacity?.toString() || '1');
+    polyline.setAttribute('data-object-id', obj.id);
+    
+    return polyline;
+  }
+
+  private renderPolygon(obj: GeometryObject, zoom: number): SVGPolygonElement {
+    const geom = obj.geometry as PolygonGeometry;
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    
+    const pointsStr = geom.points.map(p => `${p.x},${p.y}`).join(' ');
+    polygon.setAttribute('points', pointsStr);
+    polygon.setAttribute('fill', obj.style.fill || 'none');
+    polygon.setAttribute('stroke', obj.style.stroke || '#000000');
+    polygon.setAttribute('stroke-width', ((obj.style.strokeWidth || 2) / zoom).toString());
+    polygon.setAttribute('stroke-linejoin', 'round');
+    polygon.setAttribute('opacity', obj.style.opacity?.toString() || '1');
+    polygon.setAttribute('data-object-id', obj.id);
+    
+    return polygon;
   }
 }
