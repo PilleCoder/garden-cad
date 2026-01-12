@@ -90,7 +90,12 @@ export class ProjectSerializer {
 
     // Clear existing data
     const objectsToRemove = project.getAllObjects();
-    objectsToRemove.forEach(obj => project.removeObject(obj.id));
+    console.log(`Clearing ${objectsToRemove.length} existing objects before import`);
+    objectsToRemove.forEach(obj => {
+      console.log(`  Removing: ${obj.id} (${obj.metadata.name || 'unnamed'})`);
+      project.removeObject(obj.id);
+    });
+    console.log(`Objects remaining after clear: ${project.getAllObjects().length}`);
     
     // Restore layers (if present, otherwise use defaults)
     if (data.layers && data.layers.length > 0) {
@@ -145,6 +150,7 @@ export class ProjectSerializer {
     }
 
     // Restore objects
+    console.log(`Restoring ${data.objects.length} objects from import`);
     data.objects.forEach((objData: any) => {
       const obj = new GeometryObject(
         objData.id,
@@ -153,8 +159,10 @@ export class ProjectSerializer {
         objData.style || {},
         objData.metadata || {}
       );
+      console.log(`  Adding: ${obj.id} (${obj.metadata.name || 'unnamed'}) to layer ${obj.layerId}`);
       project.addObject(obj);
     });
+    console.log(`Objects in project after restore: ${project.getAllObjects().length}`);
 
     // Restore measurements
     if (measurementManager && data.measurements) {
