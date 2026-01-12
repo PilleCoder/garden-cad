@@ -671,9 +671,9 @@ async function importFromFile(): Promise<void> {
     currentProjectName = projectJSON.metadata.name;
     hasUnsavedChanges = true;
     
-    // Force complete refresh
-    console.log('Refreshing viewport...');
-    viewport.refresh();
+    // Fit view to imported content
+    console.log('Fitting view to imported content...');
+    viewport.fitToContent();
     measurementRenderer.render(viewport.getZoom());
     
     console.log(`✓ Imported project: ${currentProjectName}`);
