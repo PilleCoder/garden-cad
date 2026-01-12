@@ -626,18 +626,31 @@ async function exportToFile(): Promise<void> {
  */
 async function importFromFile(): Promise<void> {
   try {
+    console.log('Starting import process...');
     const projectJSON = await FileAdapter.importFromFile();
+    
+    console.log('File loaded, validating...');
+    console.log('Project data:', projectJSON);
     
     if (!ProjectSerializer.validate(projectJSON)) {
       alert('Invalid project file');
+      console.error('Validation failed');
       return;
     }
 
+    console.log('Validation passed');
+    
     const confirmImport = confirm(
       `Import project "${projectJSON.metadata.name}"?\nThis will replace your current work.`
     );
     
-    if (!confirmImport) return;
+    if (!confirmImport) {
+      console.log('Import cancelled by user');
+      return;
+    }
+
+    console.log('User confirmed import, clearing current project...');
+    console.log('Current objects before import:', project.getAllObjects().length);
 
     // Clear selection before import
     if (viewport.getSelection()) {
@@ -652,16 +665,22 @@ async function importFromFile(): Promise<void> {
       measurementManager
     );
 
+    console.log('Deserialization complete, objects after import:', project.getAllObjects().length);
+
     currentProjectId = projectJSON.projectId;
     currentProjectName = projectJSON.metadata.name;
     hasUnsavedChanges = true;
     
     // Force complete refresh
+    console.log('Refreshing viewport...');
     viewport.refresh();
     measurementRenderer.render(viewport.getZoom());
     
-    console.log(`Imported project: ${currentProjectName}`);
-    console.log(`Active objects: ${project.getAllObjects().length}`);
+    console.log(`✓ Imported project: ${currentProjectName}`);
+    console.log(`✓ Active objects: ${project.getAllObjects().length}`);
+    
+    // Show success message
+    alert(`Successfully imported: ${currentProjectName}\nObjects: ${project.getAllObjects().length}`);
     
     // Save imported project
     await saveProject();
