@@ -10,6 +10,7 @@ export class ToolManager {
     this.svg = svg;
     this.transform = transform;
     this.attachEventListeners();
+    this.attachKeyboardListeners();
   }
 
   setActiveTool(tool: Tool): void {
@@ -32,7 +33,12 @@ export class ToolManager {
     this.svg.addEventListener('mousemove', this.handleMouseMove.bind(this));
     this.svg.addEventListener('mouseup', this.handleMouseUp.bind(this));
     this.svg.addEventListener('click', this.handleClick.bind(this));
+    this.svg.addEventListener('dblclick', this.handleDoubleClick.bind(this));
     this.svg.addEventListener('contextmenu', this.handleContextMenu.bind(this));
+  }
+
+  private attachKeyboardListeners(): void {
+    window.addEventListener('keydown', this.handleKeyDown.bind(this));
   }
 
   private convertMouseEvent(e: MouseEvent): ToolMouseEvent {
@@ -91,6 +97,28 @@ export class ToolManager {
     if (this.activeTool.onContextMenu) {
       const toolEvent = this.convertMouseEvent(e);
       this.activeTool.onContextMenu(toolEvent);
+    }
+  }
+
+  private handleDoubleClick(e: MouseEvent): void {
+    if (!this.activeTool) return;
+    if (e.shiftKey || e.button === 1) return;
+    
+    // Prevent default selection
+    e.preventDefault();
+    
+    // Call tool's double-click handler if it exists
+    if (this.activeTool.onDoubleClick) {
+      this.activeTool.onDoubleClick();
+    }
+  }
+
+  private handleKeyDown(e: KeyboardEvent): void {
+    if (!this.activeTool) return;
+    
+    // Call tool's keydown handler if it exists
+    if (this.activeTool.onKeyDown) {
+      this.activeTool.onKeyDown(e.key);
     }
   }
 

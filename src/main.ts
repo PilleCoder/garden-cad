@@ -6,6 +6,8 @@ import { SelectTool } from './tools/SelectTool';
 import { PointTool } from './tools/PointTool';
 import { LineTool } from './tools/LineTool';
 import { CircleTool } from './tools/CircleTool';
+import { PolylineTool } from './tools/PolylineTool';
+import { PolygonTool } from './tools/PolygonTool';
 import { MeasureTool } from './tools/MeasureTool';
 import { AreaTool } from './tools/AreaTool';
 import { LayerManager } from './model/LayerManager';
@@ -35,6 +37,8 @@ app.innerHTML = `
         <button id="tool-point" class="tool-btn">Point</button>
         <button id="tool-line" class="tool-btn">Line</button>
         <button id="tool-circle" class="tool-btn">Circle</button>
+        <button id="tool-polyline" class="tool-btn">Polyline</button>
+        <button id="tool-polygon" class="tool-btn">Polygon</button>
         <button id="tool-measure" class="tool-btn">Measure</button>
         <button id="tool-area" class="tool-btn">Area</button>
       </div>
@@ -224,6 +228,28 @@ const circleTool = new CircleTool(
   }
 );
 
+const polylineTool = new PolylineTool(
+  project,
+  viewport.getPreviewGroup(),
+  snapManager,
+  layerManager,
+  () => {
+    viewport.refresh();
+    markModified();
+  }
+);
+
+const polygonTool = new PolygonTool(
+  project,
+  viewport.getPreviewGroup(),
+  snapManager,
+  layerManager,
+  () => {
+    viewport.refresh();
+    markModified();
+  }
+);
+
 const measureTool = new MeasureTool(
   measurementManager,
   snapManager,
@@ -237,7 +263,7 @@ const areaTool = new AreaTool(
 );
 
 // Tool switching
-const tools = { select: selectTool, point: pointTool, line: lineTool, circle: circleTool, measure: measureTool, area: areaTool };
+const tools = { select: selectTool, point: pointTool, line: lineTool, circle: circleTool, polyline: polylineTool, polygon: polygonTool, measure: measureTool, area: areaTool };
 let activeTool: string = 'select';
 
 function setTool(toolName: string): void {
@@ -254,6 +280,8 @@ function setTool(toolName: string): void {
     point: 'Point tool active - click to place point',
     line: 'Line tool active - click start point, then end point',
     circle: 'Circle tool active - click center, then click to set radius',
+    polyline: 'Polyline tool active - click points, double-click or Enter to finish',
+    polygon: 'Polygon tool active - click points, double-click or Enter to finish',
     measure: 'Measure tool active - click two points to measure distance',
     area: 'Area tool active - click points to define polygon, double-click or Enter to complete'
   };
@@ -280,6 +308,8 @@ document.getElementById('tool-select')?.addEventListener('click', () => setTool(
 document.getElementById('tool-point')?.addEventListener('click', () => setTool('point'));
 document.getElementById('tool-line')?.addEventListener('click', () => setTool('line'));
 document.getElementById('tool-circle')?.addEventListener('click', () => setTool('circle'));
+document.getElementById('tool-polyline')?.addEventListener('click', () => setTool('polyline'));
+document.getElementById('tool-polygon')?.addEventListener('click', () => setTool('polygon'));
 document.getElementById('tool-measure')?.addEventListener('click', () => setTool('measure'));
 document.getElementById('tool-area')?.addEventListener('click', () => setTool('area'));
 
@@ -314,14 +344,7 @@ document.getElementById('clear-measurements')?.addEventListener('click', () => {
   console.log('All measurements cleared');
 });
 
-// Handle double-click for area tool
-viewport.getSVG().addEventListener('dblclick', () => {
-  if (activeTool === 'area') {
-    areaTool.onDoubleClick();
-  }
-});
-
-// Keyboard shortcuts
+// Keyboard shortcuts (ToolManager now handles tool-specific keys)
 document.addEventListener('keydown', (e) => {
   // Ctrl+S to save
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -330,29 +353,13 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   
-  // ESC key handling
-  if (e.key === 'Escape') {
-    if (activeTool === 'line') {
-      (lineTool as any).onKeyDown?.('Escape');
-    } else if (activeTool === 'circle') {
-      (circleTool as any).onKeyDown?.('Escape');
-    } else if (activeTool === 'measure') {
-      measureTool.onKeyDown('Escape');
-    } else if (activeTool === 'area') {
-      areaTool.onKeyDown('Escape');
-    }
-  }
-  
-  // Enter key for area tool
-  if (e.key === 'Enter' && activeTool === 'area') {
-    areaTool.onKeyDown('Enter');
-  }
-  
   // Tool shortcuts
   if (e.key === 'v' || e.key === 'V') setTool('select');
   if (e.key === 'p' || e.key === 'P') setTool('point');
   if (e.key === 'l' || e.key === 'L') setTool('line');
   if (e.key === 'c' || e.key === 'C') setTool('circle');
+  if (e.key === 'y' || e.key === 'Y') setTool('polyline');
+  if (e.key === 'o' || e.key === 'O') setTool('polygon');
   if (e.key === 'm' || e.key === 'M') setTool('measure');
   if (e.key === 'a' || e.key === 'A') setTool('area');
   
@@ -371,7 +378,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-console.log('All drawing and measurement tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle, M=Measure, A=Area, G=Toggle Snap');
+console.log('All drawing and measurement tools loaded. Shortcuts: V=Select, P=Point, L=Line, C=Circle, Y=Polyline, O=Polygon, M=Measure, A=Area, G=Toggle Snap');
 console.log('Layer system initialized with 7 default layers (including Measurements)');
 console.log('Measurement tools ready: Distance and Area measurement available - click measurements to delete');
 

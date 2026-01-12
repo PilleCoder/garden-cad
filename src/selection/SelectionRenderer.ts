@@ -1,6 +1,6 @@
 import { Project } from '../model/Project';
 import { Selection } from './Selection';
-import { GeometryType, PointGeometry, LineGeometry, CircleGeometry } from '../geometry/types';
+import { GeometryType, PointGeometry, LineGeometry, CircleGeometry, PolylineGeometry, PolygonGeometry } from '../geometry/types';
 
 export class SelectionRenderer {
   private selectionGroup: SVGGElement;
@@ -96,6 +96,64 @@ export class SelectionRenderer {
         circle.setAttribute('stroke-width', (2 / zoom).toString());
         circle.setAttribute('stroke-dasharray', `${8 / zoom} ${4 / zoom}`);
         return circle;
+      }
+
+      case GeometryType.POLYLINE: {
+        const polylineGeom = geom as PolylineGeometry;
+        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        
+        // Highlight the path
+        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        const pointsStr = polylineGeom.points.map(p => `${p.x},${p.y}`).join(' ');
+        polyline.setAttribute('points', pointsStr);
+        polyline.setAttribute('fill', 'none');
+        polyline.setAttribute('stroke', '#0066ff');
+        polyline.setAttribute('stroke-width', ((obj.style.strokeWidth || 2) / zoom + 2 / zoom).toString());
+        polyline.setAttribute('opacity', '0.5');
+        group.appendChild(polyline);
+        
+        // Vertex handles
+        polylineGeom.points.forEach(point => {
+          const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          handle.setAttribute('cx', point.x.toString());
+          handle.setAttribute('cy', point.y.toString());
+          handle.setAttribute('r', (6 / zoom).toString());
+          handle.setAttribute('fill', 'white');
+          handle.setAttribute('stroke', '#0066ff');
+          handle.setAttribute('stroke-width', (2 / zoom).toString());
+          group.appendChild(handle);
+        });
+        
+        return group;
+      }
+
+      case GeometryType.POLYGON: {
+        const polygonGeom = geom as PolygonGeometry;
+        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        
+        // Highlight the polygon
+        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        const pointsStr = polygonGeom.points.map(p => `${p.x},${p.y}`).join(' ');
+        polygon.setAttribute('points', pointsStr);
+        polygon.setAttribute('fill', 'none');
+        polygon.setAttribute('stroke', '#0066ff');
+        polygon.setAttribute('stroke-width', (2 / zoom).toString());
+        polygon.setAttribute('stroke-dasharray', `${8 / zoom} ${4 / zoom}`);
+        group.appendChild(polygon);
+        
+        // Vertex handles
+        polygonGeom.points.forEach(point => {
+          const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          handle.setAttribute('cx', point.x.toString());
+          handle.setAttribute('cy', point.y.toString());
+          handle.setAttribute('r', (6 / zoom).toString());
+          handle.setAttribute('fill', 'white');
+          handle.setAttribute('stroke', '#0066ff');
+          handle.setAttribute('stroke-width', (2 / zoom).toString());
+          group.appendChild(handle);
+        });
+        
+        return group;
       }
 
       default:

@@ -24,6 +24,10 @@ export interface Tool {
   onMouseClick(event: ToolMouseEvent): void;
   onContextMenu?(event: ToolMouseEvent): void;
   
+  // Keyboard and other events
+  onKeyDown?(key: string): void;
+  onDoubleClick?(): void;
+  
   // Cursor
   getCursor(): string;
 }

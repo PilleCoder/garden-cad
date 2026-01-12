@@ -34,7 +34,17 @@ export interface CircleGeometry extends GeometryData {
   radius: number; // centimeters
 }
 
-export type Geometry = PointGeometry | LineGeometry | CircleGeometry;
+export interface PolylineGeometry extends GeometryData {
+  type: GeometryType.POLYLINE;
+  points: Point[];
+}
+
+export interface PolygonGeometry extends GeometryData {
+  type: GeometryType.POLYGON;
+  points: Point[];
+}
+
+export type Geometry = PointGeometry | LineGeometry | CircleGeometry | PolylineGeometry | PolygonGeometry;
 
 // Style information
 export interface Style {
